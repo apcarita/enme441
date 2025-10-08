@@ -8,7 +8,10 @@ p = [4, 17, 27, 22, 10, 9, 11, 5, 6, 14]
 pwm = []
 for i in p:
     GPIO.setup(i, GPIO.OUT)
-    pwm.append(GPIO.PWM(i, 500))
+    pp = GPIO.PWM(i, 500)
+    pp.start(0)
+    pwm.append(p_obj)
+
 f = 0.2
 phi = m.pi/11
 
