@@ -10,7 +10,7 @@ for i in p:
     GPIO.setup(i, GPIO.OUT)
     pp = GPIO.PWM(i, 500)
     pp.start(0)
-    pwm.append(p_obj)
+    pwm.append(pp)
 
 f = 0.2
 phi = m.pi/11
