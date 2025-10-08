@@ -1,0 +1,20 @@
+Lab 5 – Pulse Width Modulation (PWM) and Threaded Callbacks
+Important: be sure to add a 220 Ω resistor between each LED and ground to prevent your LEDs from
+burning out.
+1. The time.time() function returns the current system time in seconds. Using this function
+together with PWM control over a GPIO pin, actuate a single LED with brightness B given by
+B = (sin(2πƒt)) 2 with a frequency of f=0.2 Hz. Do not use time.sleep() anywhere in your code.
+Use a base frequency of 500 Hz for your PWM object.
+2. Modify your code to simultaneously actuate a second LED adjacent to the first LED, with brightness
+following B = (sin(2πƒt – φ))2 , where φ = π/11 rad.
+3. Following the previous step, add all of the remaining 10 LEDs in the LED bar with φ increasing by
+π/11 rad for each successive LED (in other words, add a small phase lag between each LED). The
+result should look like a travelling wave of light that traverses the length of the LED bar.
+4. With your LEDs working, connect a free GPIO pin to a button that sets the pin to 3.3 V when pressed
+and 0 V when not pressed (if no button is available, use a jumper wire instead). Be sure to enable the
+pull-down resistor on this pin so that a nominal voltage of 0 V is applied when the button is not
+pressed. Using a threaded callback, modify your Python code to that direction of the LED wave
+propagation switches each time the button is pressed (note that this can be accomplished by changing
+the sign of the phase lag each time the callback function is triggered).
+Submit your Python code file + a short video (or youtube link to a video) demonstrating operation of the
+hardware through Canvas
