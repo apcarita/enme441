@@ -1,18 +1,27 @@
 import RPi.GPIO as GPIO
 from time import sleep, time
-
+import math as m
 
 GPIO.setmode(GPIO.BCM)
-p = 4
-GPIO.setup(p, GPIO.OUT)
-pwm = GPIO.PWM(p, 500) # create PWM object @ 100 Hz
+p = [4, 17, 27, 22, 10, 9, 11, 5, 6, 14]
+
+pwm = []
+for i in p:
+    GPIO.setup(i, GPIO.OUT)
+    pwm.append(GPIO.PWM(i, 500))
+f = 0.2
+phi = m.pi/11
+
 try:
-    pwm.start(0) # initiate PWM at 0% duty cycle
     while 1:
-        for dc in range(101): # loop duty cycle from 0 to 100
-            pwm.ChangeDutyCycle(dc) # set duty cycle
-            sleep(0.01) # sleep 10 ms
+        t = time.time()
+        for ii in range(len(p)):
+            B = (m.sin(2*m.pi*f*t - phi*ii))**2 
+            pwm[ii].ChangeDutyCycle(B*100) # set duty cycle
+
+
 except KeyboardInterrupt: # stop gracefully on ctrl-C
     print('\nExiting')
-    pwm.stop()
+    for i in pwm:
+        i.stop()
     GPIO.cleanup()
