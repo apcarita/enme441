@@ -11,18 +11,18 @@ for i in p:
     pp = GPIO.PWM(i, 500)
     pp.start(0)
     pwm.append(pp)
-global dir
+
 dir = 1
 f = 0.2
 phi = m.pi/11
 
-def flip_dir():
+def flip_dir(pin):
+    global dir
     dir *= -1   
+    print(f"dir: {dir}")
 
 GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setmode(GPIO.BCM)
-
-GPIO.add_event_detect(26, GPIO.RISING, callback=flip_dir,bouncetime=100)
+GPIO.add_event_detect(26, GPIO.RISING, callback=flip_dir, bouncetime=100)
 
 try:
     while 1:
@@ -35,6 +35,7 @@ try:
 
 except KeyboardInterrupt: # stop gracefully on ctrl-C
     print('\nExiting')
-    for i in pwm:
-        i.stop()
+    for ppp in pwm:
+        ppp.stop()
+    pwm.clear() 
     GPIO.cleanup()
