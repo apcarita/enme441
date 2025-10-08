@@ -22,7 +22,7 @@ def flip_dir(pin):
     print(f"dir: {dir}")
 
 GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.add_event_detect(26, GPIO.RISING, callback=flip_dir, bouncetime=100)
+GPIO.add_event_detect(26, GPIO.RISING, callback=flip_dir, bouncetime=600)
 
 try:
     while 1:
