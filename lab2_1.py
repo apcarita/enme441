@@ -11,15 +11,25 @@ for i in p:
     pp = GPIO.PWM(i, 500)
     pp.start(0)
     pwm.append(pp)
-
+global dir
+dir = 1
 f = 0.2
 phi = m.pi/11
+
+def flip_dir():
+    dir *= -1   
+
+GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setmode(GPIO.BCM)
+
+GPIO.add_event_detect(26, GPIO.RISING, callback=flip_dir,bouncetime=100)
 
 try:
     while 1:
         t = time()
         for ii in range(len(p)):
-            B = (m.sin(2*m.pi*f*t - phi*ii))**2 
+            
+            B = (m.sin(2*m.pi*f*t - dir*phi*ii))**2 
             pwm[ii].ChangeDutyCycle(B*100) # set duty cycle
 
 
