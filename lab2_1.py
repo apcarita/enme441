@@ -1,5 +1,5 @@
 import RPi.GPIO as GPIO
-from time import sleep, time
+from time import time
 import math as m
 
 GPIO.setmode(GPIO.BCM)
@@ -14,7 +14,7 @@ phi = m.pi/11
 
 try:
     while 1:
-        t = time.time()
+        t = time()
         for ii in range(len(p)):
             B = (m.sin(2*m.pi*f*t - phi*ii))**2 
             pwm[ii].ChangeDutyCycle(B*100) # set duty cycle
