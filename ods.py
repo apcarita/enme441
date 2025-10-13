@@ -15,8 +15,9 @@ STEP_PIN = 3  # Step pin (GPIO3)
 
 # Motor configuration
 STEPS_PER_REV = 200   # 1.8 degree step angle = 200 full steps per revolution
-MICROSTEPS = 8        # TMC2208 default is often 8 or 16 microsteps
-STEP_DELAY = 0.001    # Delay between pulses (seconds)
+MICROSTEPS = 1        # Set to 1 since MS1/MS2 floating - we'll just send more pulses
+PULSE_WIDTH = 0.00001 # Pulse HIGH time (10 microseconds minimum for TMC2208)
+STEP_DELAY = 0.002    # Delay between steps (slower for testing)
 
 def setup():
     """Initialize GPIO pins"""
@@ -30,8 +31,9 @@ def setup():
     
     print("GPIO initialized")
     print(f"Motor: NEMA 17 with TMC2208")
-    print(f"Steps per rev: {STEPS_PER_REV * MICROSTEPS} (with {MICROSTEPS}x microstepping)")
-    time.sleep(0.1)  # Let pins settle
+    print(f"Steps per rev: {STEPS_PER_REV * MICROSTEPS}")
+    print(f"Speed: {1.0/(STEP_DELAY + PULSE_WIDTH):.1f} steps/sec")
+    time.sleep(0.2)  # Let pins settle and direction setup
 
 def step_motor(steps, delay=STEP_DELAY):
     """
@@ -39,27 +41,26 @@ def step_motor(steps, delay=STEP_DELAY):
     
     Args:
         steps: Number of steps to move
-        delay: Delay between pulse states in seconds (lower = faster)
+        delay: Delay between steps in seconds (lower = faster)
     """
     for _ in range(steps):
         GPIO.output(STEP_PIN, GPIO.HIGH)
-        time.sleep(delay)
+        time.sleep(PULSE_WIDTH)  # Short pulse
         GPIO.output(STEP_PIN, GPIO.LOW)
-        time.sleep(delay)
+        time.sleep(delay)  # Longer delay before next step
 
 def run_continuous():
-    """Run motor continuously"""
-    print("Starting motor - Press Ctrl+C to stop")
-    print("If motor just buzzes, try adjusting STEP_DELAY or MICROSTEPS in the code\n")
+    """Run motor continuously at constant speed"""
+    print("\nStarting motor - Press Ctrl+C to stop")
+    print("Motor should be turning now...\n")
     
     try:
-        rev_count = 0
+        step_count = 0
         while True:
-            # Account for microstepping
             step_motor(STEPS_PER_REV * MICROSTEPS)
-            rev_count += 1
-            if rev_count % 10 == 0:
-                print(f"Completed {rev_count} revolutions")
+            step_count += STEPS_PER_REV * MICROSTEPS
+            if step_count % 1000 == 0:
+                print(f"Steps completed: {step_count}")
     except KeyboardInterrupt:
         print("\nStopping motor...")
         cleanup()
