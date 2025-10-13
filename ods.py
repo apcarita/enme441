@@ -1,76 +1,50 @@
-#!/usr/bin/env python3
 """
 TMC2209 Stepper Motor Control for Raspberry Pi
 NEMA 17 (17HS19-2004S1) - 1.8deg step angle (200 steps/rev)
 
-Install: pip3 install RPi.GPIO
+Install: pip3 install TMC-2209-Raspberry-Pi
 """
 
-import RPi.GPIO as GPIO
+from TMC_2209.TMC_2209_StepperDriver import TMC_2209
 import time
 
 # Pin configuration
 DIR_PIN = 2   # Direction pin (GPIO2)
 STEP_PIN = 3  # Step pin (GPIO3)
+EN_PIN = -1   # Enable pin is wired to ground
 
 # Motor configuration
-STEPS_PER_REV = 200   # 1.8 degree step angle = 200 full steps per revolution
-MICROSTEPS = 1        # Set to 1 for now
-PULSE_WIDTH = 0.00005 # Pulse HIGH time (50 microseconds for TMC2209)
-STEP_DELAY = 0.005    # Delay between steps - start SLOW (5ms)
+MOTOR_CURRENT_MA = 1200  # 1.2A (60% of 2A max for safety)
+STEPS_PER_REV = 200      # 1.8 degree step angle
 
-def setup():
-    """Initialize GPIO pins"""
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(DIR_PIN, GPIO.OUT)
-    GPIO.setup(STEP_PIN, GPIO.OUT)
+def main():
+    """Main function to run motor continuously"""
     
-    # Set initial direction (HIGH = clockwise, LOW = counter-clockwise)
-    GPIO.output(DIR_PIN, GPIO.HIGH)
-    GPIO.output(STEP_PIN, GPIO.LOW)
+    # Initialize TMC2209
+    print("Initializing TMC2209...")
+    tmc = TMC_2209(DIR_PIN, STEP_PIN, EN_PIN)
     
-    print("GPIO initialized")
+    # Configure motor
+    tmc.set_motor_current(MOTOR_CURRENT_MA)
+    tmc.set_direction_reg(True)  # True = clockwise
+    tmc.set_interpolation(True)  # Smooth motion
+    tmc.set_spreadcycle(False)   # Use StealthChop for quiet operation
+    
     print(f"Motor: NEMA 17 with TMC2209")
-    print(f"Steps per rev: {STEPS_PER_REV * MICROSTEPS}")
-    print(f"Speed: {1.0/(STEP_DELAY + PULSE_WIDTH):.1f} steps/sec (~{60.0/((STEP_DELAY + PULSE_WIDTH)*STEPS_PER_REV):.1f} RPM)")
-    time.sleep(0.2)  # Let pins settle and direction setup
-
-def step_motor(steps, delay=STEP_DELAY):
-    """
-    Move motor by specified number of steps
-    
-    Args:
-        steps: Number of steps to move
-        delay: Delay between steps in seconds (lower = faster)
-    """
-    for _ in range(steps):
-        GPIO.output(STEP_PIN, GPIO.HIGH)
-        time.sleep(PULSE_WIDTH)  # Short pulse
-        GPIO.output(STEP_PIN, GPIO.LOW)
-        time.sleep(delay)  # Longer delay before next step
-
-def run_continuous():
-    """Run motor continuously at constant speed"""
-    print("\nStarting motor - Press Ctrl+C to stop")
-    print("Motor should be turning now...\n")
+    print(f"Current: {MOTOR_CURRENT_MA}mA")
+    print(f"Starting motor - Press Ctrl+C to stop\n")
     
     try:
-        step_count = 0
+        # Run motor continuously at constant speed
         while True:
-            step_motor(STEPS_PER_REV * MICROSTEPS)
-            step_count += STEPS_PER_REV * MICROSTEPS
-            if step_count % 1000 == 0:
-                print(f"Steps completed: {step_count}")
+            # Move one revolution
+            tmc.run_to_position_steps(STEPS_PER_REV)
+            
     except KeyboardInterrupt:
         print("\nStopping motor...")
-        cleanup()
-
-def cleanup():
-    """Clean up GPIO on exit"""
-    GPIO.cleanup()
-    print("GPIO cleaned up")
+    finally:
+        tmc.stop()
+        print("Motor stopped")
 
 if __name__ == "__main__":
-    setup()
-    run_continuous()
-
+    main()
