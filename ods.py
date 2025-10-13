@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TMC2208 Stepper Motor Control for Raspberry Pi
+TMC2209 Stepper Motor Control for Raspberry Pi
 NEMA 17 (17HS19-2004S1) - 1.8deg step angle (200 steps/rev)
 
 Install: pip3 install RPi.GPIO
@@ -15,9 +15,9 @@ STEP_PIN = 3  # Step pin (GPIO3)
 
 # Motor configuration
 STEPS_PER_REV = 200   # 1.8 degree step angle = 200 full steps per revolution
-MICROSTEPS = 1        # Set to 1 since MS1/MS2 floating - we'll just send more pulses
-PULSE_WIDTH = 0.00001 # Pulse HIGH time (10 microseconds minimum for TMC2208)
-STEP_DELAY = 0.002    # Delay between steps (slower for testing)
+MICROSTEPS = 1        # Set to 1 for now
+PULSE_WIDTH = 0.00005 # Pulse HIGH time (50 microseconds for TMC2209)
+STEP_DELAY = 0.005    # Delay between steps - start SLOW (5ms)
 
 def setup():
     """Initialize GPIO pins"""
@@ -30,9 +30,9 @@ def setup():
     GPIO.output(STEP_PIN, GPIO.LOW)
     
     print("GPIO initialized")
-    print(f"Motor: NEMA 17 with TMC2208")
+    print(f"Motor: NEMA 17 with TMC2209")
     print(f"Steps per rev: {STEPS_PER_REV * MICROSTEPS}")
-    print(f"Speed: {1.0/(STEP_DELAY + PULSE_WIDTH):.1f} steps/sec")
+    print(f"Speed: {1.0/(STEP_DELAY + PULSE_WIDTH):.1f} steps/sec (~{60.0/((STEP_DELAY + PULSE_WIDTH)*STEPS_PER_REV):.1f} RPM)")
     time.sleep(0.2)  # Let pins settle and direction setup
 
 def step_motor(steps, delay=STEP_DELAY):
