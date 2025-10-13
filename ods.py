@@ -13,7 +13,7 @@ STEP_PIN = 3  # Step pin
 
 # Motor configuration
 STEPS_PER_REV = 200  # 1.8 degree step angle = 200 steps per revolution
-DELAY = 0.0005       # Delay between steps (seconds) - adjust for speed
+STEP_DELAY = 0.002   # Delay for each pulse state (seconds) - adjust for speed
 
 def setup():
     """Initialize GPIO pins"""
@@ -26,13 +26,13 @@ def setup():
     GPIO.output(STEP_PIN, GPIO.LOW)
     print("GPIO initialized")
 
-def step_motor(steps, delay=DELAY):
+def step_motor(steps, delay=STEP_DELAY):
     """
     Move motor by specified number of steps
     
     Args:
         steps: Number of steps to move
-        delay: Delay between steps in seconds (lower = faster)
+        delay: Delay between pulse states in seconds (lower = faster)
     """
     for _ in range(steps):
         GPIO.output(STEP_PIN, GPIO.HIGH)
