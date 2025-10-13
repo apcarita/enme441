@@ -32,17 +32,18 @@ def setup():
 def step_once():
     """Single step with proper timing"""
     GPIO.output(STEP_PIN, GPIO.HIGH)
-    time.sleep(0.000005)  # 5 microseconds HIGH
+    time.sleep(0.0001)  # 100 microseconds HIGH (longer pulse for TMC2209)
     GPIO.output(STEP_PIN, GPIO.LOW)
-    time.sleep(0.000005)  # 5 microseconds LOW
+    time.sleep(0.0001)  # 100 microseconds LOW
 
-def run_motor(speed_delay=0.001):
+def run_motor(speed_delay=0.01):
     """Run motor continuously
     
     Args:
         speed_delay: Additional delay between steps (lower = faster)
-                     0.001 = ~1000 steps/sec
-                     0.002 = ~500 steps/sec
+                     0.01 = ~50 RPM (slow, smooth)
+                     0.005 = ~100 RPM 
+                     0.002 = ~250 RPM (fast)
     """
     try:
         step_count = 0
@@ -63,8 +64,8 @@ def run_motor(speed_delay=0.001):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Control NEMA 17 stepper motor with TMC2209')
-    parser.add_argument('--speed', type=float, default=0.003,
-                        help='Speed delay in seconds (lower = faster). Default: 0.003. Range: 0.0001 to 0.01')
+    parser.add_argument('--speed', type=float, default=0.01,
+                        help='Speed delay in seconds (lower = faster). Default: 0.01. Range: 0.001 to 0.05')
     parser.add_argument('--rpm', type=float,
                         help='Target RPM (overrides --speed)')
     parser.add_argument('--direction', type=int, choices=[0, 1], default=1,
@@ -85,5 +86,5 @@ if __name__ == "__main__":
     
     setup()
     GPIO.output(DIR_PIN, GPIO.HIGH if args.direction else GPIO.LOW)
-    time.sleep(0.1)
+    time.sleep(0.5)  # Give TMC2209 time to settle direction
     run_motor(speed_delay=speed_delay)
