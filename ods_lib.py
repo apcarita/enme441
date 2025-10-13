@@ -42,17 +42,27 @@ def main():
     parser.add_argument("--direction", type=int, choices=[0, 1], default=1, help="1=CW, 0=CCW. Default: 1")
     parser.add_argument("--microsteps", type=int, default=1, help="Microsteps (1,2,4,8,16). Match MS1/MS2 wiring. Default: 1")
     parser.add_argument("--revs", type=float, default=5.0, help="How many revolutions to move. Default: 5")
+    parser.add_argument("--mode-pins", type=int, nargs=3, metavar=("MS1","MS2","MS3"),
+                        help="Optional GPIOs for mode pins (unused for TMC2209 if hard-wired). Example: --mode-pins 22 23 24")
     args = parser.parse_args()
 
     full_steps = 200
     steps_per_rev = full_steps * max(1, args.microsteps)
     step_delay = rpm_to_delay(args.rpm, steps_per_rev)
 
+    # Determine mode pins tuple for RpiMotorLib (must be integers, not None)
+    if args.mode_pins:
+        mode_pins = tuple(args.mode_pins)
+    else:
+        # Provide dummy but valid integers to satisfy the library (won't be used)
+        # Choose unused pins that you are NOT wiring to anything
+        mode_pins = (5, 6, 13)
+
     # RpiMotorLib stepper instance (A4988-like, works for TMC2209 STEP/DIR)
     stepper = RpiMotorLib.A4988Nema(
         direction_pin=args.dir,
         step_pin=args.step,
-        mode_pins=(None, None, None),  # We control MS1/MS2 in hardware wiring, not via GPIO
+        mode_pins=mode_pins,
         motor_type="NEMA"
     )
 
