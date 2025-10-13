@@ -55,7 +55,6 @@ def main():
         mode_pins = tuple(args.mode_pins)
     else:
         # Provide dummy but valid integers to satisfy the library (won't be used)
-        # Choose unused pins that you are NOT wiring to anything
         mode_pins = (5, 6, 13)
 
     # RpiMotorLib stepper instance (A4988-like, works for TMC2209 STEP/DIR)
@@ -63,8 +62,12 @@ def main():
         direction_pin=args.dir,
         step_pin=args.step,
         mode_pins=mode_pins,
-        motor_type="NEMA"
+        motor_type="A4988"
     )
+
+    # Resolve steptype from requested microsteps
+    steptype_map = {1: "Full", 2: "Half", 4: "1/4", 8: "1/8", 16: "1/16"}
+    steptype = steptype_map.get(args.microsteps, "Full")
 
     # Set DIR line explicitly before motion
     GPIO.setmode(GPIO.BCM)
@@ -74,13 +77,13 @@ def main():
 
     total_steps = int(steps_per_rev * args.revs)
     print(f"DIR pin={args.dir}, STEP pin={args.step}")
-    print(f"RPM={args.rpm}, microsteps={args.microsteps}, steps/rev={steps_per_rev}")
+    print(f"RPM={args.rpm}, microsteps={args.microsteps}, steptype={steptype}, steps/rev={steps_per_rev}")
     print(f"Step delay≈{step_delay:.6f}s, total steps={total_steps}")
 
     # Move the requested number of steps at the computed speed
     # RpiMotorLib: .motor_go(clockwise, steptype, steps, stepdelay, verbose, initdelay)
     clockwise = True if args.direction == 1 else False
-    stepper.motor_go(clockwise, "Full", total_steps, step_delay, False, 0.05)
+    stepper.motor_go(clockwise, steptype, total_steps, step_delay, False, 0.05)
 
     GPIO.cleanup()
     print("Done.")
