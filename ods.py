@@ -8,6 +8,7 @@ Install: pip3 install RPi.GPIO
 
 import RPi.GPIO as GPIO
 import time
+import argparse
 
 # Pin configuration
 DIR_PIN = 2   # Direction pin (GPIO2)
@@ -23,9 +24,7 @@ def setup():
     GPIO.setup(STEP_PIN, GPIO.OUT)
     GPIO.setwarnings(False)
     
-    GPIO.output(DIR_PIN, GPIO.HIGH)  # Set direction (HIGH = CW)
     GPIO.output(STEP_PIN, GPIO.LOW)
-    time.sleep(0.1)
     
     print("TMC2209 Stepper Motor - Raspberry Pi Zero 2 W")
     print("Press Ctrl+C to stop\n")
@@ -63,5 +62,28 @@ def run_motor(speed_delay=0.001):
         print("Motor stopped")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Control NEMA 17 stepper motor with TMC2209')
+    parser.add_argument('--speed', type=float, default=0.003,
+                        help='Speed delay in seconds (lower = faster). Default: 0.003. Range: 0.0001 to 0.01')
+    parser.add_argument('--rpm', type=float,
+                        help='Target RPM (overrides --speed)')
+    parser.add_argument('--direction', type=int, choices=[0, 1], default=1,
+                        help='Direction: 1=clockwise, 0=counter-clockwise. Default: 1')
+    
+    args = parser.parse_args()
+    
+    # Calculate speed_delay from RPM if provided
+    if args.rpm:
+        speed_delay = (60.0 / (args.rpm * STEPS_PER_REV)) - 0.00001
+        speed_delay = max(0, speed_delay)  # Ensure non-negative
+        print(f"Target RPM: {args.rpm}")
+    else:
+        speed_delay = args.speed
+    
+    print(f"Speed delay: {speed_delay}s")
+    print(f"Direction: {'Clockwise' if args.direction else 'Counter-clockwise'}")
+    
     setup()
-    run_motor(speed_delay=0.003)  # Start slow, adjust this value to change speed
+    GPIO.output(DIR_PIN, GPIO.HIGH if args.direction else GPIO.LOW)
+    time.sleep(0.1)
+    run_motor(speed_delay=speed_delay)
