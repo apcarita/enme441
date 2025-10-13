@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-Basic TMC2209 Stepper Motor Control for Raspberry Pi
+TMC2208 Stepper Motor Control for Raspberry Pi
 NEMA 17 (17HS19-2004S1) - 1.8deg step angle (200 steps/rev)
+
+Install: pip3 install RPi.GPIO
 """
 
 import RPi.GPIO as GPIO
 import time
 
 # Pin configuration
-DIR_PIN = 2   # Direction pin
-STEP_PIN = 3  # Step pin
+DIR_PIN = 2   # Direction pin (GPIO2)
+STEP_PIN = 3  # Step pin (GPIO3)
 
 # Motor configuration
-STEPS_PER_REV = 200  # 1.8 degree step angle = 200 steps per revolution
-STEP_DELAY = 0.002   # Delay for each pulse state (seconds) - adjust for speed
+STEPS_PER_REV = 200   # 1.8 degree step angle = 200 full steps per revolution
+MICROSTEPS = 8        # TMC2208 default is often 8 or 16 microsteps
+STEP_DELAY = 0.001    # Delay between pulses (seconds)
 
 def setup():
     """Initialize GPIO pins"""
@@ -24,7 +27,11 @@ def setup():
     # Set initial direction (HIGH = clockwise, LOW = counter-clockwise)
     GPIO.output(DIR_PIN, GPIO.HIGH)
     GPIO.output(STEP_PIN, GPIO.LOW)
+    
     print("GPIO initialized")
+    print(f"Motor: NEMA 17 with TMC2208")
+    print(f"Steps per rev: {STEPS_PER_REV * MICROSTEPS} (with {MICROSTEPS}x microstepping)")
+    time.sleep(0.1)  # Let pins settle
 
 def step_motor(steps, delay=STEP_DELAY):
     """
@@ -41,11 +48,18 @@ def step_motor(steps, delay=STEP_DELAY):
         time.sleep(delay)
 
 def run_continuous():
-    """Run motor continuously at full speed"""
+    """Run motor continuously"""
     print("Starting motor - Press Ctrl+C to stop")
+    print("If motor just buzzes, try adjusting STEP_DELAY or MICROSTEPS in the code\n")
+    
     try:
+        rev_count = 0
         while True:
-            step_motor(STEPS_PER_REV)
+            # Account for microstepping
+            step_motor(STEPS_PER_REV * MICROSTEPS)
+            rev_count += 1
+            if rev_count % 10 == 0:
+                print(f"Completed {rev_count} revolutions")
     except KeyboardInterrupt:
         print("\nStopping motor...")
         cleanup()
