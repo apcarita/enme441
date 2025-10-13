@@ -3,6 +3,13 @@
 TMC2209 Stepper Motor Control for Raspberry Pi Zero 2 W
 NEMA 17 (17HS19-2004S1) - 1.8deg step angle (200 steps/rev)
 
+Hardware Setup:
+- DIR -> GPIO2, STEP -> GPIO3, EN -> GND
+- MS1 and MS2 floating = 16 microsteps (default)
+- For smoother operation: ground MS1 and MS2 for full-step mode
+- Motor wiring: Black->2A, Green->1A, Red->2B, Blue->1B
+- 12V external power supply connected to VM and motor GND
+
 Install: pip3 install RPi.GPIO
 """
 
