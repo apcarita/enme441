@@ -16,6 +16,8 @@ STEP_PIN = 3  # Step pin (GPIO3)
 
 # Motor configuration
 STEPS_PER_REV = 200
+MICROSTEPS = 16  # MS1/MS2 floating = 16 microsteps (TMC2209 default)
+ACTUAL_STEPS_PER_REV = STEPS_PER_REV * MICROSTEPS  # 3200 steps per revolution
 
 def setup():
     """Initialize GPIO pins"""
@@ -27,6 +29,8 @@ def setup():
     GPIO.output(STEP_PIN, GPIO.LOW)
     
     print("TMC2209 Stepper Motor - Raspberry Pi Zero 2 W")
+    print(f"Microstepping: {MICROSTEPS}x (MS1/MS2 floating)")
+    print(f"Steps per revolution: {ACTUAL_STEPS_PER_REV}")
     print("Press Ctrl+C to stop\n")
 
 def step_once():
@@ -36,14 +40,15 @@ def step_once():
     GPIO.output(STEP_PIN, GPIO.LOW)
     time.sleep(0.0001)  # 100 microseconds LOW
 
-def run_motor(speed_delay=0.01):
+def run_motor(speed_delay=0.001):
     """Run motor continuously
     
     Args:
         speed_delay: Additional delay between steps (lower = faster)
-                     0.01 = ~50 RPM (slow, smooth)
-                     0.005 = ~100 RPM 
-                     0.002 = ~250 RPM (fast)
+                     With 16x microstepping (3200 steps/rev):
+                     0.001 = ~18 RPM (slow, smooth)
+                     0.0005 = ~35 RPM
+                     0.0002 = ~90 RPM
     """
     try:
         step_count = 0
@@ -51,8 +56,8 @@ def run_motor(speed_delay=0.01):
             step_once()
             step_count += 1
             
-            if step_count % STEPS_PER_REV == 0:
-                print(f"Revolutions: {step_count // STEPS_PER_REV}")
+            if step_count % ACTUAL_STEPS_PER_REV == 0:
+                print(f"Revolutions: {step_count // ACTUAL_STEPS_PER_REV}")
             
             if speed_delay > 0:
                 time.sleep(speed_delay)
@@ -64,8 +69,8 @@ def run_motor(speed_delay=0.01):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Control NEMA 17 stepper motor with TMC2209')
-    parser.add_argument('--speed', type=float, default=0.01,
-                        help='Speed delay in seconds (lower = faster). Default: 0.01. Range: 0.001 to 0.05')
+    parser.add_argument('--speed', type=float, default=0.001,
+                        help='Speed delay in seconds (lower = faster). Default: 0.001. Range: 0.0001 to 0.01')
     parser.add_argument('--rpm', type=float,
                         help='Target RPM (overrides --speed)')
     parser.add_argument('--direction', type=int, choices=[0, 1], default=1,
@@ -75,7 +80,7 @@ if __name__ == "__main__":
     
     # Calculate speed_delay from RPM if provided
     if args.rpm:
-        speed_delay = (60.0 / (args.rpm * STEPS_PER_REV)) - 0.00001
+        speed_delay = (60.0 / (args.rpm * ACTUAL_STEPS_PER_REV)) - 0.0002
         speed_delay = max(0, speed_delay)  # Ensure non-negative
         print(f"Target RPM: {args.rpm}")
     else:
