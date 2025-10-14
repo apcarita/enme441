@@ -38,10 +38,10 @@ def setup():
     """Initialize GPIO pins for all motors"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
+    GPIO.cleanup()  # Clean up any previous GPIO usage
     for dir_pin, step_pin in MOTOR_PINS:
-        GPIO.setup(dir_pin, GPIO.OUT)
-        GPIO.setup(step_pin, GPIO.OUT)
-        GPIO.output(step_pin, GPIO.LOW)
+        GPIO.setup(dir_pin, GPIO.OUT, initial=GPIO.LOW)
+        GPIO.setup(step_pin, GPIO.OUT, initial=GPIO.LOW)
 
     print("TMC2209 - Triple motor control (Pi Zero 2 W)")
     print(f"Microstepping: {MICROSTEPS}x, steps/rev: {ACTUAL_STEPS_PER_REV}")

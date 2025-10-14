@@ -37,11 +37,10 @@ def setup():
     """Initialize GPIO pins"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
+    GPIO.cleanup()  # Clean up any previous GPIO usage
     for dir_pin, step_pin in MOTOR_PINS:
-        GPIO.setup(dir_pin, GPIO.OUT)
-        GPIO.setup(step_pin, GPIO.OUT)
-        GPIO.output(step_pin, GPIO.LOW)
-        GPIO.output(dir_pin, GPIO.LOW)
+        GPIO.setup(dir_pin, GPIO.OUT, initial=GPIO.LOW)
+        GPIO.setup(step_pin, GPIO.OUT, initial=GPIO.LOW)
     print("TMC2209 XY Square Path Controller")
     print(f"Microstepping: {MICROSTEPS}x")
     print("Press Ctrl+C to stop\n")
