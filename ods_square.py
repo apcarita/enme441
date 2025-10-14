@@ -2,7 +2,7 @@
 """
 TMC2209 XY Square Path Controller for Raspberry Pi Zero 2 W
 
-Motors 1+2 control X-axis, Motor 3 controls Y-axis (inverted).
+Motors 2+3 control X-axis, Motor 1 controls Y-axis (inverted).
 Repeats square path: [+X,+Y], [-X,+Y], [-X,-Y], [+X,-Y]
 
 Install: pip3 install RPi.GPIO
@@ -14,9 +14,9 @@ import argparse
 
 # Pin configuration (DIR, STEP)
 MOTOR_PINS = [
-    (2, 3),     # Motor 1 (X-axis)
+    (2, 3),     # Motor 1 (Y-axis, inverted)
     (4, 17),    # Motor 2 (X-axis)
-    (27, 22),   # Motor 3 (Y-axis, inverted)
+    (27, 22),   # Motor 3 (X-axis)
 ]
 
 # Motor configuration
@@ -56,13 +56,13 @@ def safe_shutdown():
 
 def move_segment(x_dir, y_dir, rpm, duration_sec):
     """Move motors in X and Y directions for specified duration"""
-    # Set directions (Motor 3 Y-axis inverted)
+    # Set directions (Motor 1 Y-axis inverted)
     x_gpio_dir = GPIO.HIGH if x_dir > 0 else GPIO.LOW
     y_gpio_dir = GPIO.LOW if y_dir > 0 else GPIO.HIGH  # Inverted
     
-    GPIO.output(MOTOR_PINS[0][0], x_gpio_dir)  # Motor 1 DIR
-    GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)  # Motor 2 DIR
-    GPIO.output(MOTOR_PINS[2][0], y_gpio_dir)  # Motor 3 DIR
+    GPIO.output(MOTOR_PINS[0][0], y_gpio_dir)  # Motor 1 DIR (Y-axis)
+    GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)  # Motor 2 DIR (X-axis)
+    GPIO.output(MOTOR_PINS[2][0], x_gpio_dir)  # Motor 3 DIR (X-axis)
     
     # Calculate step delay from RPM
     step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
@@ -71,9 +71,9 @@ def move_segment(x_dir, y_dir, rpm, duration_sec):
     # Determine which motors to pulse
     step_pins = []
     if x_dir != 0:
-        step_pins.extend([MOTOR_PINS[0][1], MOTOR_PINS[1][1]])  # Motors 1+2
+        step_pins.extend([MOTOR_PINS[1][1], MOTOR_PINS[2][1]])  # Motors 2+3 (X-axis)
     if y_dir != 0:
-        step_pins.append(MOTOR_PINS[2][1])  # Motor 3
+        step_pins.append(MOTOR_PINS[0][1])  # Motor 1 (Y-axis)
     
     if not step_pins:
         time.sleep(duration_sec)
