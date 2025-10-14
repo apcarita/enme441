@@ -90,13 +90,6 @@ def move_segment(x_dir, y_dir, rpm, duration_sec, accel_mps2, wheel_dia_mm):
     GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)  # Motor 2 DIR (X-axis)
     GPIO.output(MOTOR_PINS[2][0], x_gpio_dir)  # Motor 3 DIR (X-axis)
     
-    # Calculate target velocity from RPM
-    wheel_circumference_m = (math.pi * wheel_dia_mm) / 1000.0
-    target_velocity_mps = (rpm / 60.0) * wheel_circumference_m
-    
-    # Calculate accel/decel time
-    accel_time = target_velocity_mps / accel_mps2
-    
     # Determine which motors to pulse
     step_pins = []
     if x_dir != 0:
@@ -108,35 +101,17 @@ def move_segment(x_dir, y_dir, rpm, duration_sec, accel_mps2, wheel_dia_mm):
         time.sleep(duration_sec)
         return
     
-    # Calculate target step delay at cruise speed
-    target_step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
-    target_step_delay = max(0, target_step_delay)
+    # Simple acceleration: just use fixed step delay
+    step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
+    step_delay = max(0.0001, step_delay)  # Minimum delay to prevent infinite loops
     
-    # If accel time is more than half segment duration, limit it
-    if accel_time * 2 > duration_sec:
-        accel_time = duration_sec / 2.0
+    # Calculate total steps needed
+    total_steps = int(duration_sec / (step_delay + 2 * PULSE_WIDTH))
     
     start_time = time.time()
-    elapsed = 0
+    step_count = 0
     
-    while elapsed < duration_sec:
-        current_time = time.time()
-        elapsed = current_time - start_time
-        
-        # Calculate current step delay based on acceleration profile
-        if elapsed < accel_time:
-            # Accelerating
-            progress = elapsed / accel_time
-            current_step_delay = target_step_delay / max(0.01, progress)
-        elif elapsed > (duration_sec - accel_time):
-            # Decelerating
-            time_left = duration_sec - elapsed
-            progress = time_left / accel_time
-            current_step_delay = target_step_delay / max(0.01, progress)
-        else:
-            # Cruise
-            current_step_delay = target_step_delay
-        
+    while step_count < total_steps and (time.time() - start_time) < duration_sec:
         # Pulse motors
         for pin in step_pins:
             GPIO.output(pin, GPIO.HIGH)
@@ -145,8 +120,8 @@ def move_segment(x_dir, y_dir, rpm, duration_sec, accel_mps2, wheel_dia_mm):
             GPIO.output(pin, GPIO.LOW)
         time.sleep(PULSE_WIDTH)
         
-        if current_step_delay > 0:
-            time.sleep(current_step_delay)
+        time.sleep(step_delay)
+        step_count += 1
 
 def run_path(path, rpm, segment_duration, accel_mps2, wheel_dia_mm):
     """Run the custom path continuously"""
