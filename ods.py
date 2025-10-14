@@ -25,7 +25,7 @@ import argparse
 MOTOR_PINS = [
     (2, 3),     # Motor 1
     (4, 17),    # Motor 2
-    (26, 19),   # Motor 3
+    (27, 22),   # Motor 3
 ]
 
 # Motor configuration
