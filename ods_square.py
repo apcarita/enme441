@@ -35,9 +35,9 @@ SQUARE_PATH = [
 
 def setup():
     """Initialize GPIO pins"""
+    GPIO.cleanup()  # Clean up any previous GPIO usage
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
-    GPIO.cleanup()  # Clean up any previous GPIO usage
     for dir_pin, step_pin in MOTOR_PINS:
         GPIO.setup(dir_pin, GPIO.OUT, initial=GPIO.LOW)
         GPIO.setup(step_pin, GPIO.OUT, initial=GPIO.LOW)
