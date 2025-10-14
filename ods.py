@@ -57,6 +57,14 @@ def pulse_all(step_pins):
         GPIO.output(pin, GPIO.LOW)
     time.sleep(PULSE_WIDTH)
 
+def safe_shutdown():
+    """Drive all motor pins LOW and cleanup GPIO"""
+    for dir_pin, step_pin in MOTOR_PINS:
+        GPIO.output(dir_pin, GPIO.LOW)
+        GPIO.output(step_pin, GPIO.LOW)
+    time.sleep(0.1)
+    GPIO.cleanup()
+
 def run_motors(speed_delay=0.001, direction=1):
     """Run all motors continuously at the same speed and direction"""
     # Set directions
@@ -77,7 +85,7 @@ def run_motors(speed_delay=0.001, direction=1):
                 time.sleep(speed_delay)
     except KeyboardInterrupt:
         print("\nStopping...")
-        GPIO.cleanup()
+        safe_shutdown()
         print("Motors stopped")
 
 if __name__ == "__main__":
