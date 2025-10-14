@@ -39,12 +39,35 @@ PULSE_WIDTH = 0.0001
 
 def setup():
     """Initialize GPIO pins"""
-    GPIO.cleanup()  # Clean up any previous GPIO usage
+    # Multiple cleanup attempts to handle busy pins
+    for _ in range(3):
+        try:
+            GPIO.cleanup()
+            time.sleep(0.1)
+        except:
+            pass
+    
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
+    
+    # Try to setup pins with retry logic
     for dir_pin, step_pin in MOTOR_PINS:
-        GPIO.setup(dir_pin, GPIO.OUT, initial=GPIO.LOW)
-        GPIO.setup(step_pin, GPIO.OUT, initial=GPIO.LOW)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                GPIO.setup(dir_pin, GPIO.OUT, initial=GPIO.LOW)
+                GPIO.setup(step_pin, GPIO.OUT, initial=GPIO.LOW)
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    print(f"Failed to setup pins {dir_pin},{step_pin} after {max_retries} attempts")
+                    print(f"Error: {e}")
+                    print("Try running: sudo python3 -c 'import RPi.GPIO as GPIO; GPIO.cleanup()'")
+                    exit(1)
+                time.sleep(0.2)
+                GPIO.cleanup()
+                GPIO.setmode(GPIO.BCM)
+    
     print("TMC2209 XY Path Controller")
     print(f"Microstepping: {MICROSTEPS}x")
     print("Press Ctrl+C to stop\n")
