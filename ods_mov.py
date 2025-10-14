@@ -68,60 +68,66 @@ def safe_shutdown():
     time.sleep(0.1)
     GPIO.cleanup()
 
-def move_segment(x_dir, y_dir, rpm, duration_sec, accel_mps2, wheel_dia_mm):
+def move_segment(x_dir, y_dir, rpm, duration_sec, accel, wheel_dia):
     """Move motors in X and Y directions with acceleration limiting"""
-    # Set directions (Motor 1 Y-axis inverted)
     x_gpio_dir = GPIO.HIGH if x_dir > 0 else GPIO.LOW
-    y_gpio_dir = GPIO.LOW if y_dir > 0 else GPIO.HIGH  # Inverted
+    y_gpio_dir = GPIO.LOW if y_dir > 0 else GPIO.HIGH
     
-    GPIO.output(MOTOR_PINS[0][0], y_gpio_dir)  # Motor 1 DIR (Y-axis)
-    GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)  # Motor 2 DIR (X-axis)
-    GPIO.output(MOTOR_PINS[2][0], x_gpio_dir)  # Motor 3 DIR (X-axis)
+    GPIO.output(MOTOR_PINS[0][0], y_gpio_dir)
+    GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)
+    GPIO.output(MOTOR_PINS[2][0], x_gpio_dir)
     
-    # Determine which motors to pulse
     step_pins = []
     if x_dir != 0:
-        step_pins.extend([MOTOR_PINS[1][1], MOTOR_PINS[2][1]])  # Motors 2+3 (X-axis)
+        step_pins.extend([MOTOR_PINS[1][1], MOTOR_PINS[2][1]])
     if y_dir != 0:
-        step_pins.append(MOTOR_PINS[0][1])  # Motor 1 (Y-axis)
+        step_pins.append(MOTOR_PINS[0][1])
     
     if not step_pins:
         time.sleep(duration_sec)
         return
     
-    # Simple acceleration: just use fixed step delay
-    step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
-    step_delay = max(0.0001, step_delay)  # Minimum delay to prevent infinite loops
+    target_step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
+    target_step_delay = max(0, target_step_delay)
     
-    # Calculate total steps needed
-    total_steps = int(duration_sec / (step_delay + 2 * PULSE_WIDTH))
+    wheel_circ_m = (math.pi * wheel_dia) / 1000.0
+    target_vel = (rpm / 60.0) * wheel_circ_m
+    accel_time = min(target_vel / accel, duration_sec / 2.0)
     
     start_time = time.time()
-    step_count = 0
-    
-    while step_count < total_steps and (time.time() - start_time) < duration_sec:
-        # Pulse motors
+    while time.time() - start_time < duration_sec:
+        elapsed = time.time() - start_time
+        
+        if elapsed < accel_time:
+            ratio = elapsed / accel_time
+            current_delay = target_step_delay / max(0.1, ratio)
+        elif elapsed > (duration_sec - accel_time):
+            ratio = (duration_sec - elapsed) / accel_time
+            current_delay = target_step_delay / max(0.1, ratio)
+        else:
+            current_delay = target_step_delay
+        
         for pin in step_pins:
             GPIO.output(pin, GPIO.HIGH)
         time.sleep(PULSE_WIDTH)
         for pin in step_pins:
             GPIO.output(pin, GPIO.LOW)
         time.sleep(PULSE_WIDTH)
-        
-        time.sleep(step_delay)
-        step_count += 1
+        if current_delay > 0:
+            time.sleep(current_delay)
 
-def run_path(path, rpm, segment_duration, accel_mps2, wheel_dia_mm):
+def run_path(path, rpm, segment_duration, accel, wheel_dia):
     """Run the custom path continuously"""
     try:
         lap = 0
         while True:
             for i, (x_dir, y_dir) in enumerate(path):
                 print(f"Lap {lap+1} - Segment {i+1}/{len(path)}: X={x_dir:+d}, Y={y_dir:+d}")
-                move_segment(x_dir, y_dir, rpm, segment_duration, accel_mps2, wheel_dia_mm)
+                move_segment(x_dir, y_dir, rpm, segment_duration, accel, wheel_dia)
             lap += 1
     except KeyboardInterrupt:
         print("\nStopping...")
+    finally:
         safe_shutdown()
         print("Motors stopped")
 
@@ -144,7 +150,7 @@ Examples:
     parser.add_argument('--segment-sec', type=float, default=1.5,
                         help='Duration of each segment in seconds (default: 1.5)')
     parser.add_argument('--accel', type=float, default=2.0,
-                        help='Tangential acceleration limit in m/s² (default: 2.0)')
+                        help='Acceleration limit in m/s² (default: 2.0)')
     parser.add_argument('--wheel-dia', type=float, default=98.0,
                         help='Wheel diameter in mm (default: 98)')
     
@@ -161,7 +167,7 @@ Examples:
         exit(1)
     
     print(f"Path: {path}")
-    print(f"RPM: {args.rpm} | Segment: {args.segment_sec}s | Accel: {args.accel} m/s² | Wheel: {args.wheel_dia}mm")
+    print(f"RPM: {args.rpm} | Segment: {args.segment_sec}s | Accel: {args.accel} m/s²")
     
     setup()
     run_path(path, args.rpm, args.segment_sec, args.accel, args.wheel_dia)
