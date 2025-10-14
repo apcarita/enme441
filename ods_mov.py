@@ -3,25 +3,26 @@
 TMC2209 XY Path Controller for Raspberry Pi Zero 2 W
 
 Motors 2+3 control X-axis, Motor 1 controls Y-axis (inverted).
-Define custom motion paths via command line.
+Define custom motion paths via command line with acceleration limiting.
 
 Install: pip3 install RPi.GPIO
 
 Examples:
     # Square path
-    python3 ods_move.py --path "[[1,1],[-1,1],[-1,-1],[1,-1]]"
+    python3 ods_mov.py --path "[[1,1],[-1,1],[-1,-1],[1,-1]]"
     
-    # Diagonal left-right
-    python3 ods_move.py --path "[[1,1],[-1,-1]]" --rpm 100 --segment-sec 0.5
+    # Diagonal left-right with custom accel
+    python3 ods_mov.py --path "[[1,1],[-1,-1]]" --rpm 100 --segment-sec 0.5 --accel 3
     
     # Line back and forth
-    python3 ods_move.py --path "[[1,0],[-1,0]]"
+    python3 ods_mov.py --path "[[1,0],[-1,0]]"
 """
 
 import RPi.GPIO as GPIO
 import time
 import argparse
 import ast
+import math
 
 # Pin configuration (DIR, STEP)
 MOTOR_PINS = [
@@ -57,8 +58,8 @@ def safe_shutdown():
     time.sleep(0.1)
     GPIO.cleanup()
 
-def move_segment(x_dir, y_dir, rpm, duration_sec):
-    """Move motors in X and Y directions for specified duration"""
+def move_segment(x_dir, y_dir, rpm, duration_sec, accel_mps2, wheel_dia_mm):
+    """Move motors in X and Y directions with acceleration limiting"""
     # Set directions (Motor 1 Y-axis inverted)
     x_gpio_dir = GPIO.HIGH if x_dir > 0 else GPIO.LOW
     y_gpio_dir = GPIO.LOW if y_dir > 0 else GPIO.HIGH  # Inverted
@@ -67,9 +68,12 @@ def move_segment(x_dir, y_dir, rpm, duration_sec):
     GPIO.output(MOTOR_PINS[1][0], x_gpio_dir)  # Motor 2 DIR (X-axis)
     GPIO.output(MOTOR_PINS[2][0], x_gpio_dir)  # Motor 3 DIR (X-axis)
     
-    # Calculate step delay from RPM
-    step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
-    step_delay = max(0, step_delay)
+    # Calculate target velocity from RPM
+    wheel_circumference_m = (math.pi * wheel_dia_mm) / 1000.0
+    target_velocity_mps = (rpm / 60.0) * wheel_circumference_m
+    
+    # Calculate accel/decel time
+    accel_time = target_velocity_mps / accel_mps2
     
     # Determine which motors to pulse
     step_pins = []
@@ -82,26 +86,54 @@ def move_segment(x_dir, y_dir, rpm, duration_sec):
         time.sleep(duration_sec)
         return
     
-    # Run for duration
+    # Calculate target step delay at cruise speed
+    target_step_delay = (60.0 / (rpm * ACTUAL_STEPS_PER_REV)) - (2 * PULSE_WIDTH)
+    target_step_delay = max(0, target_step_delay)
+    
+    # If accel time is more than half segment duration, limit it
+    if accel_time * 2 > duration_sec:
+        accel_time = duration_sec / 2.0
+    
     start_time = time.time()
-    while time.time() - start_time < duration_sec:
+    elapsed = 0
+    
+    while elapsed < duration_sec:
+        current_time = time.time()
+        elapsed = current_time - start_time
+        
+        # Calculate current step delay based on acceleration profile
+        if elapsed < accel_time:
+            # Accelerating
+            progress = elapsed / accel_time
+            current_step_delay = target_step_delay / max(0.01, progress)
+        elif elapsed > (duration_sec - accel_time):
+            # Decelerating
+            time_left = duration_sec - elapsed
+            progress = time_left / accel_time
+            current_step_delay = target_step_delay / max(0.01, progress)
+        else:
+            # Cruise
+            current_step_delay = target_step_delay
+        
+        # Pulse motors
         for pin in step_pins:
             GPIO.output(pin, GPIO.HIGH)
         time.sleep(PULSE_WIDTH)
         for pin in step_pins:
             GPIO.output(pin, GPIO.LOW)
         time.sleep(PULSE_WIDTH)
-        if step_delay > 0:
-            time.sleep(step_delay)
+        
+        if current_step_delay > 0:
+            time.sleep(current_step_delay)
 
-def run_path(path, rpm, segment_duration):
+def run_path(path, rpm, segment_duration, accel_mps2, wheel_dia_mm):
     """Run the custom path continuously"""
     try:
         lap = 0
         while True:
             for i, (x_dir, y_dir) in enumerate(path):
                 print(f"Lap {lap+1} - Segment {i+1}/{len(path)}: X={x_dir:+d}, Y={y_dir:+d}")
-                move_segment(x_dir, y_dir, rpm, segment_duration)
+                move_segment(x_dir, y_dir, rpm, segment_duration, accel_mps2, wheel_dia_mm)
             lap += 1
     except KeyboardInterrupt:
         print("\nStopping...")
@@ -126,6 +158,10 @@ Examples:
                         help='Motor speed in RPM (default: 50)')
     parser.add_argument('--segment-sec', type=float, default=1.5,
                         help='Duration of each segment in seconds (default: 1.5)')
+    parser.add_argument('--accel', type=float, default=2.0,
+                        help='Tangential acceleration limit in m/s² (default: 2.0)')
+    parser.add_argument('--wheel-dia', type=float, default=98.0,
+                        help='Wheel diameter in mm (default: 98)')
     
     args = parser.parse_args()
     
@@ -140,8 +176,8 @@ Examples:
         exit(1)
     
     print(f"Path: {path}")
-    print(f"RPM: {args.rpm} | Segment duration: {args.segment_sec}s")
+    print(f"RPM: {args.rpm} | Segment: {args.segment_sec}s | Accel: {args.accel} m/s² | Wheel: {args.wheel_dia}mm")
     
     setup()
-    run_path(path, args.rpm, args.segment_sec)
+    run_path(path, args.rpm, args.segment_sec, args.accel, args.wheel_dia)
 
