@@ -2,7 +2,7 @@ import RPi.GPIO as GPIO
 import time
 
 GPIO.setmode(GPIO.BCM)
-dataPin, latchPin, clockPin = 23, 24, 25
+dataPin, latchPin, clockPin = 2, 3, 4
 GPIO.setup(dataPin, GPIO.OUT)
 GPIO.setup(latchPin, GPIO.OUT, initial=0)  # start latch & clock low
 GPIO.setup(clockPin, GPIO.OUT, initial=0)
