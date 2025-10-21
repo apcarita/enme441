@@ -1,10 +1,15 @@
 import RPi.GPIO as GPIO
 import time
 
-GPIO.setmode(GPIO.BCM)
-dataPin, latchPin, clockPin = 2, 3, 4
-GPIO.setup(dataPin, GPIO.OUT)
-GPIO.setup(latchPin, GPIO.OUT, initial=0)  # start latch & clock low
+class Shifter:
+    def __init__(self, dataPin, latchPin, clockPin):
+        self.dataPin = dataPin
+        self.latchPin = latchPin
+        self.clockPin = clockPin
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.dataPin, GPIO.OUT)
+        GPIO.setup(self.latchPin, GPIO.OUT, initial=0)  # start latch & clock low
 GPIO.setup(clockPin, GPIO.OUT, initial=0)
 
 pattern = 0b01100110  # pattern to display
