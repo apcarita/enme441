@@ -11,23 +11,55 @@ gpio.setmode(gpio.BCM)
 pwm_objects = {}
 for pin in LED_PINS:
     gpio.setup(pin, gpio.OUT)
-    pwm_objects[pin] = gpio.PWM(pin, 1000)
+    pwm_objects[pin] = gpio.PWM(pin, 1000)  # 1kHz frequency
     pwm_objects[pin].start(0)
 
 def web_page():
     html = """
-    <html><head>
-    <head> <title>GPIO Pins</title> </head>
+    <html><head><title>LED Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <head>
+    <style>
+    html{font-family: Helvetica; display:inline-block; margin: 0px auto; text-align: center;}
+    h1{color: #0F3376; padding: 2vh;}
+    p{font-size: 1.5rem;}
+    .slider-container {margin: 20px auto; width: 300px;}
+    input[type="range"] {width: 100%; height: 25px;}
+    .led-label {font-size: 1.2rem; margin: 10px 0;}
+    </style>
+    <script>
+    function updateLED(ledNum) {
+        var brightness = document.getElementById('slider' + ledNum).value;
+        document.getElementById('value' + ledNum).textContent = brightness + '%';
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.send('led=' + ledNum + '&brightness=' + brightness);
+    }
+    </script>
+    </head>
     <body>
-    <h1>LED Controls</h1> 
-    <form action="/" method="POST">
-      <p>Brightness level:</p>
-      <p><input type="range" name="brightness" min="0" max="100" value="0"></p>
-      <p><input type="radio" name="led" value="1" checked> LED 1 (""" + str(led_brightness[1]) + """%)</p>
-      <p><input type="radio" name="led" value="2"> LED 2 (""" + str(led_brightness[2]) + """%)</p>
-      <p><input type="radio" name="led" value="3"> LED 3 (""" + str(led_brightness[3]) + """%)</p>
-      <p><button type="submit" class="button" name="submit" value="">Change Brightness</button></p>
-    </form>
+    <h1>LED Brightness Control</h1>
+    
+    <div class="slider-container">
+      <p class="led-label">LED 1: <span id="value1">""" + str(led_brightness[1]) + """%</span></p>
+      <input type="range" id="slider1" min="0" max="100" value="""" + str(led_brightness[1]) + """" 
+             oninput="updateLED(1)">
+    </div>
+    
+    <div class="slider-container">
+      <p class="led-label">LED 2: <span id="value2">""" + str(led_brightness[2]) + """%</span></p>
+      <input type="range" id="slider2" min="0" max="100" value="""" + str(led_brightness[2]) + """" 
+             oninput="updateLED(2)">
+    </div>
+    
+    <div class="slider-container">
+      <p class="led-label">LED 3: <span id="value3">""" + str(led_brightness[3]) + """%</span></p>
+      <input type="range" id="slider3" min="0" max="100" value="""" + str(led_brightness[3]) + """" 
+             oninput="updateLED(3)">
+    </div>
+    
     </body>
     </html>
     """
