@@ -6,8 +6,8 @@ GPIO.setmode(GPIO.BCM)
 
 try:
     while True:
-           GPIO.output(2, GPIO.LOW)
-           time.sleep(100)
-           GPIO.output(2, GPIO.HIGH)
+        GPIO.output(2, GPIO.LOW)
+        time.sleep(100)
+        GPIO.output(2, GPIO.HIGH)
 except:
     GPIO.cleanup()
