@@ -14,7 +14,7 @@ for pin in LED_PINS:
     pwm_objects[pin] = gpio.PWM(pin, 1000)  # 1kHz frequency
     pwm_objects[pin].start(0)
 
-def web_page():
+def web_page(): # ALL HTML/JS/CSS AI generated 
     html = """
     <html><head><title>LED Control</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
