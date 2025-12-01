@@ -40,7 +40,12 @@ def getFiringAngles(curPos, target):
 with open('frontend/public/positions.json', 'r') as f:
     positions_data = json.load(f)
 
+positions_data = fetchJson("")
+
+print("current location: ")
 print(getMePos(positions_data, '13'))
+
+print("\n emmnies at: ")
 print(getEnemyPos(positions_data, '13'))
 
 # Compute firing angles for each enemy
