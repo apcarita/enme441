@@ -40,7 +40,7 @@ def getFiringAngles(curPos, target):
 with open('frontend/public/positions.json', 'r') as f:
     positions_data = json.load(f)
 
-positions_data = fetchJson("")
+#positions_data = fetchJson("")
 
 print("current location: ")
 print(getMePos(positions_data, '13'))

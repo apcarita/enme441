@@ -32,7 +32,7 @@ class Stepper:
             time.sleep(Stepper.delay)
     
     def off(self):
-        Stepper.shifter_outputs &= ~(0b1111 << self.bit_offset)
+        Stepper.shifter_outputs &= ~(0b0000 << self.bit_offset)
         self.s.shiftByte(Stepper.shifter_outputs)
 
 
