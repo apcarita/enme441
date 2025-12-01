@@ -1,5 +1,6 @@
 import time
 from shifter import Shifter
+from RPi import GPIO
 
 class Stepper:    
     seq = [0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001]
@@ -32,7 +33,7 @@ class Stepper:
             time.sleep(Stepper.delay)
     
     def off(self):
-        Stepper.shifter_outputs &= ~(0b0000 << self.bit_offset)
+        Stepper.shifter_outputs &= ~(0b1111 << self.bit_offset)
         self.s.shiftByte(Stepper.shifter_outputs)
 
 
@@ -46,7 +47,16 @@ def interleave_rotate(motors, degrees_list):
         for j, motor in enumerate(motors):
             if i < steps_list[j]:
                 motor.step(dirs[j])
+            else:
+                motor.off()
         time.sleep(Stepper.delay)
+
+def end(self):
+    self.s.shiftByte(0b00000000)
+    time.sleep(0.1)
+    GPIO.cleanup()
+    print("end")
+
 
 
 if __name__ == '__main__':

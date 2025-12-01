@@ -74,6 +74,10 @@ class TurretState:
                     with self.lock:
                         self.azimuth = new_az
                         self.altitude = new_alt
+            else:
+                # Turn off motors when not moving to prevent heating
+                self.azimuth_motor.off()
+                self.altitude_motor.off()
             
             time.sleep(0.01)  #100Hz 
     
