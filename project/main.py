@@ -9,10 +9,9 @@ from stepperS import Stepper, interleave_rotate
 from shifter import Shifter
 import math
 
-# Configuration
 PORT = 8080
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
-DEV_MODE = not os.path.exists(FRONTEND_DIR)  # If dist doesn't exist, assume dev mode
+DEV_MODE = not os.path.exists(FRONTEND_DIR)  
 
 # Motor state
 class TurretState:
@@ -37,13 +36,11 @@ class TurretState:
         self.movement_thread.start()
     
     def set_velocity(self, azimuth_vel, altitude_vel):
-        """Set movement velocity (-1, 0, or 1 for each axis)"""
         with self.lock:
             self.azimuth_velocity = max(-1, min(1, azimuth_vel))
             self.altitude_velocity = max(-1, min(1, altitude_vel))
     
     def _movement_loop(self):
-        """Continuously move motors based on velocity"""
         STEP_SIZE = 0.02  # radians per step
         
         while self.running:
@@ -78,11 +75,9 @@ class TurretState:
                         self.azimuth = new_az
                         self.altitude = new_alt
             
-            # Small delay to control movement speed
-            time.sleep(0.01)  # 100Hz movement loop
+            time.sleep(0.01)  #100Hz 
     
     def get_position(self):
-        """Get current position"""
         with self.lock:
             return {
                 'azimuth': self.azimuth,
@@ -91,18 +86,14 @@ class TurretState:
             }
     
     def set_laser(self, state):
-        """Control laser state"""
         with self.lock:
             self.laser_on = state
-            # TODO: Implement actual laser GPIO control here
-            # GPIO.output(LASER_PIN, GPIO.HIGH if state else GPIO.LOW)
+            #add laser stuff
     
     def calibrate(self):
-        """Reset position to zero"""
         with self.lock:
             self.azimuth = 0.0
             self.altitude = 0.0
-            # Motors stay in current physical position, just reset the reference
 
 # Global state
 turret_state = TurretState()
@@ -127,7 +118,6 @@ class TurretHandler(BaseHTTPRequestHandler):
         self.serve_static_file(parsed.path)
     
     def do_POST(self):
-        """Handle POST requests"""
         parsed = urlparse(self.path)
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
@@ -206,7 +196,6 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_error(404, 'File not found')
             return
         
-        # Determine content type
         content_type = 'text/html'
         if file_path.endswith('.js'):
             content_type = 'application/javascript'

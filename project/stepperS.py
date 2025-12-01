@@ -37,11 +37,6 @@ class Stepper:
 
 
 def interleave_rotate(motors, degrees_list):
-    """
-    Rotate multiple motors simultaneously by interleaving steps
-    motors: list of Stepper objects
-    degrees_list: list of degrees for each motor
-    """
     steps_list = [int(abs(d) * Stepper.steps_per_rev / 360) for d in degrees_list]
     dirs = [1 if d > 0 else -1 for d in degrees_list]
     
@@ -55,7 +50,7 @@ def interleave_rotate(motors, degrees_list):
 
 
 if __name__ == '__main__':
-    print("Starting stepper test...")
+    print("Starting stepper test")
     
     s = Shifter(data=2, latch=3, clock=4)
     m1 = Stepper(s)  # QA-QD
@@ -66,8 +61,7 @@ if __name__ == '__main__':
     print("Rotating back -90 degrees...")
     m1.rotate(-90)
     
-    print("Rotating 360 degrees (1 full rev)...")
+    print("Rotating 360 degrees")
     m1.rotate(360)
     
     m1.off()
-    print("Done!")

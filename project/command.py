@@ -1,6 +1,6 @@
 import requests
 import math as m
-import json  # Added for local file loading
+import json 
 
 def fetchJson(url):
     response = requests.get(url)
