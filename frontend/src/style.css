@@ -78,7 +78,7 @@ h1 {
 }
 
 .controls-container {
-  align-self: center;
+  align-self: flex-start;
   background: rgba(30, 30, 30, 0.6);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -92,7 +92,6 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  margin-bottom: 2rem;
 }
 
 .control-group {
@@ -281,4 +280,17 @@ button:disabled {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Keyboard controls hint */
+.keyboard-hint {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.05em;
 }

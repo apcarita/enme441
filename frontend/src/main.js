@@ -32,6 +32,9 @@ async function init() {
     camera.lookAt(x, 0, z);
     controls.target.set(x, 0, z);
   }
+  
+  // Sync with backend position on startup
+  await syncWithBackend();
 }
 
 init();
@@ -58,14 +61,84 @@ let state = {
 let laserTimer = null;
 let laserCountdownInterval = null;
 
+// Sync position with backend
+async function syncWithBackend() {
+  try {
+    const response = await fetch('/api/position');
+    const data = await response.json();
+    
+    // Update UI to match backend position
+    state.azimuth = data.azimuth;
+    state.altitude = data.altitude;
+    state.laserOn = data.laser;
+    
+    azimuthSlider.value = data.azimuth;
+    altitudeSlider.value = data.altitude;
+    azimuthVal.textContent = data.azimuth.toFixed(2) + ' rad';
+    altitudeVal.textContent = data.altitude.toFixed(2) + ' rad';
+    laserToggle.checked = data.laser;
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to sync with backend:', error);
+    return null;
+  }
+}
+
+// Frequent sync with backend for smooth display (every 100ms)
+setInterval(syncWithBackend, 100);
+
+// Keyboard controls - send velocity commands
+const keysPressed = new Set();
+let currentAzimuthVel = 0;
+let currentAltitudeVel = 0;
+
+document.addEventListener('keydown', (e) => {
+  // Prevent default arrow key scrolling
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+  }
+  keysPressed.add(e.key);
+  updateVelocity();
+});
+
+document.addEventListener('keyup', (e) => {
+  keysPressed.delete(e.key);
+  updateVelocity();
+});
+
+// Update velocity based on keys pressed
+function updateVelocity() {
+  let azimuthVel = 0;
+  let altitudeVel = 0;
+  
+  if (keysPressed.has('ArrowLeft')) {
+    azimuthVel -= 1;
+  }
+  if (keysPressed.has('ArrowRight')) {
+    azimuthVel += 1;
+  }
+  if (keysPressed.has('ArrowUp')) {
+    altitudeVel += 1;
+  }
+  if (keysPressed.has('ArrowDown')) {
+    altitudeVel -= 1;
+  }
+  
+  // Only send if velocity changed
+  if (azimuthVel !== currentAzimuthVel || altitudeVel !== currentAltitudeVel) {
+    currentAzimuthVel = azimuthVel;
+    currentAltitudeVel = altitudeVel;
+    sendVelocityCommand(azimuthVel, altitudeVel);
+  }
+}
+
 // Laser Control Functions
 async function setLaserState(isOn) {
   state.laserOn = isOn;
   laserToggle.checked = isOn;
   
-  // TODO: Send to Python backend
-  // Example API call (implement when backend is ready):
-  /*
+  // Send to Python backend
   try {
     await fetch('/api/laser', {
       method: 'POST',
@@ -75,7 +148,6 @@ async function setLaserState(isOn) {
   } catch (error) {
     console.error('Failed to set laser state:', error);
   }
-  */
   
   if (isOn) {
     console.log('🔴 Laser ON - Auto-shutoff in 3 seconds');
@@ -126,50 +198,43 @@ laserToggle.addEventListener('change', (e) => {
   setLaserState(e.target.checked);
 });
 
-async function setMotorAngles(azimuth, altitude) {
-  state.azimuth = azimuth;
-  state.altitude = altitude;
-  azimuthSlider.value = azimuth;
-  altitudeSlider.value = altitude;
-  azimuthVal.textContent = azimuth.toFixed(2) + ' rad';
-  altitudeVal.textContent = altitude.toFixed(2) + ' rad';
-  
-  // TODO: Send to Python backend
-  // Example API call (implement when backend is ready):
-  /*
-  try {
-    await fetch('/api/motors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ azimuth, altitude })
-    });
-  } catch (error) {
-    console.error('Failed to set motor angles:', error);
-  }
-  */
+function sendVelocityCommand(azimuthVel, altitudeVel) {
+  // Send velocity to Python backend (fire and forget)
+  fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ azimuth: azimuthVel, altitude: altitudeVel })
+  }).catch(error => {
+    console.error('Failed to send velocity:', error);
+  });
 }
 
+// Sliders temporarily disabled - use keyboard controls
 azimuthSlider.addEventListener('input', (e) => {
-  setMotorAngles(parseFloat(e.target.value), state.altitude);
+  // Slider control disabled in velocity mode
+  console.log('Use arrow keys for control');
 });
 
 altitudeSlider.addEventListener('input', (e) => {
-  setMotorAngles(state.azimuth, parseFloat(e.target.value));
+  // Slider control disabled in velocity mode
+  console.log('Use arrow keys for control');
 });
 
 btnCalibrate.addEventListener('click', async () => {
   console.log('🎯 Calibrating - Setting Zero Position...');
-  await setMotorAngles(0, 0);
   
-  // TODO: Send calibration command to Python backend
-  /*
+  // Stop movement first
+  sendVelocityCommand(0, 0);
+  
+  // Send calibration command to Python backend
   try {
     await fetch('/api/calibrate', { method: 'POST' });
     console.log('✅ Calibration complete');
+    // Sync with backend position
+    await syncWithBackend();
   } catch (error) {
     console.error('Failed to calibrate:', error);
   }
-  */
 });
 
 let autoTargeting = false;
