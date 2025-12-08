@@ -166,18 +166,23 @@ class TurretState:
         self.running = False
         self.set_velocity(0, 0)
         self.set_laser(False)
-        time.sleep(0.2)
+        time.sleep(0.1)
         
-        # Turn off motors
-        self.azimuth_motor.off()
-        self.altitude_motor.off()
-        time.sleep(0.05)
+        # Clear shift register - send zero multiple times to ensure it takes
+        for _ in range(3):
+            self.shifter.shiftByte(0)
+            time.sleep(0.01)
         
-        # Clear shift register completely
-        self.shifter.shiftByte(0b00000000)
-        time.sleep(0.05)
+        # Set GPIO pins low before cleanup
+        print("Setting GPIO pins low...")
+        GPIO.output(LASER_PIN, GPIO.LOW)
+        GPIO.output(self.shifter.dataPin, GPIO.LOW)
+        GPIO.output(self.shifter.clockPin, GPIO.LOW)
+        GPIO.output(self.shifter.latchPin, GPIO.LOW)
+        time.sleep(0.1)
         
         # Clean up GPIO
+        print("Cleaning up GPIO...")
         GPIO.cleanup()
         print("Turret shutdown complete")
 
