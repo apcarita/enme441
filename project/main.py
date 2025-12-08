@@ -176,9 +176,9 @@ class TurretState:
         # Set GPIO pins low before cleanup
         print("Setting GPIO pins low...")
         GPIO.output(LASER_PIN, GPIO.LOW)
-        GPIO.output(self.shifter.dataPin, GPIO.LOW)
-        GPIO.output(self.shifter.clockPin, GPIO.LOW)
-        GPIO.output(self.shifter.latchPin, GPIO.LOW)
+    #    GPIO.output(self.shifter.dataPin, GPIO.LOW)
+       #GPIO.output(self.shifter.clockPin, GPIO.LOW)
+        #GPIO.output(self.shifter.latchPin, GPIO.LOW)
         time.sleep(0.1)
         
         # Clean up GPIO
