@@ -50,6 +50,7 @@ const altitudeVal = document.getElementById('altitude-val');
 const btnCalibrate = document.getElementById('btn-calibrate');
 const btnFetch = document.getElementById('btn-fetch');
 const btnAuto = document.getElementById('btn-auto');
+const btnStop = document.getElementById('btn-stop');
 
 // State
 let state = {
@@ -269,8 +270,8 @@ btnAuto.addEventListener('click', async () => {
   }
   
   autoTargeting = true;
-  btnAuto.disabled = true;
-  btnAuto.textContent = 'Targeting...';
+  btnAuto.style.display = 'none';
+  btnStop.style.display = 'inline-block';
   
   console.log('🎯 Starting Auto-Target Sequence...');
   
@@ -286,19 +287,30 @@ btnAuto.addEventListener('click', async () => {
     console.log('  Backend is now fetching targets and firing...');
     console.log('  Check terminal for detailed progress');
     
-    // Note: The sequence runs asynchronously on the backend
-    // UI will update via the position polling
-    
   } catch (error) {
     console.error('❌ Failed to start auto-target:', error);
+    autoTargeting = false;
+    btnAuto.style.display = 'inline-block';
+    btnStop.style.display = 'none';
+  }
+});
+
+btnStop.addEventListener('click', async () => {
+  console.log('⚠️ Stopping auto-target sequence...');
+  
+  try {
+    await fetch('/api/stop-target', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    console.log('✓ Stop command sent');
+  } catch (error) {
+    console.error('❌ Failed to stop:', error);
   }
   
-  // Re-enable button after a short delay (sequence runs on backend)
-  setTimeout(() => {
-    autoTargeting = false;
-    btnAuto.disabled = false;
-    btnAuto.textContent = 'Start Auto-Target';
-  }, 2000);
+  autoTargeting = false;
+  btnAuto.style.display = 'inline-block';
+  btnStop.style.display = 'none';
 });
 
 // Animation Loop

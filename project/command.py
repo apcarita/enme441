@@ -39,19 +39,42 @@ def getGlobes(json):
     return [[globe['r'], globe['theta'], globe['z']] for globe in globes]
 
 def getFiringAngles(curPos, target):
-    zLaser = .9911
-    cur = [curPos[0] * m.cos(curPos[1]), curPos[0] * m.sin(curPos[1]), .9911]
-
-    target = [target[0] * m.cos(target[1]), target[0] * m.sin(target[1]), target[2]]
-
-    delta = [target[0] - cur[0], target[1] - cur[1], target[2] - zLaser]
+    """
+    Calculate firing angles relative to turret's local frame.
+    Assumes turret's zero azimuth points toward field center (theta=0).
+    """
+    zLaser = 0.9911  # Laser height in cm
     
-    # Azimuth: angle in horizontal plane
-    azimuth = m.atan2(delta[1], delta[0])
+    # Convert polar to Cartesian
+    cur_x = curPos[0] * m.cos(curPos[1])
+    cur_y = curPos[0] * m.sin(curPos[1])
     
-    # Altitude: elevation angle from horizontal (not zenith angle)
-    horizontal_dist = m.sqrt(delta[0]**2 + delta[1]**2)
-    altitude = m.atan2(delta[2], horizontal_dist)  # Positive = up, negative = down
+    target_x = target[0] * m.cos(target[1])
+    target_y = target[0] * m.sin(target[1])
+    target_z = target[2]
+    
+    # Delta in global frame
+    delta_x = target_x - cur_x
+    delta_y = target_y - cur_y
+    delta_z = target_z - zLaser
+    
+    # Calculate angle in global frame
+    global_azimuth = m.atan2(delta_y, delta_x)
+    
+    # Convert to turret's local frame
+    # Assuming turret's zero points toward field center (at angle = turret_theta + pi)
+    turret_facing = curPos[1] + m.pi  # Turret faces outward from center
+    azimuth = global_azimuth - turret_facing
+    
+    # Normalize to [-pi, pi]
+    while azimuth > m.pi:
+        azimuth -= 2 * m.pi
+    while azimuth < -m.pi:
+        azimuth += 2 * m.pi
+    
+    # Altitude: elevation angle from horizontal
+    horizontal_dist = m.sqrt(delta_x**2 + delta_y**2)
+    altitude = m.atan2(delta_z, horizontal_dist)
     
     return azimuth, altitude
 

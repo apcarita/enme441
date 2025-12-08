@@ -17,6 +17,7 @@ DEV_MODE = not os.path.exists(FRONTEND_DIR)
 LASER_PIN = 17
 TEAM_NUMBER = '13' 
 JSON_URL = 'http://192.168.1.254:8000/positions.json'
+AZIMUTH_OFFSET = 0.0  # Adjust during calibration if needed (radians)
 
 # Setup laser pin
 GPIO.setup(LASER_PIN, GPIO.OUT)
@@ -153,42 +154,58 @@ class TurretState:
 
 # Global state
 turret_state = TurretState()
+auto_target_running = False
 
 def auto_target_sequence():
-    # Fetch position data
-    print(f"Fetching JSON from {JSON_URL}")
-    position_data = fetchJson(JSON_URL)
-        
-    my_pos = getMePos(position_data, TEAM_NUMBER)
-    print(f"✓ current position: r={my_pos[0]:.1f}cm, theta={my_pos[1]:.3f}rad")
-        
-    enemies = getEnemyPos(position_data, TEAM_NUMBER)
-    globes = getGlobes(position_data)
-    all_targets = globes + enemies 
-        
-    print(f"{len(enemies)} enemy turrets and {len(globes)} globe found")
-    print(f"  Total targets: {len(all_targets)}")
-        
-    for i, target in enumerate(all_targets):
-        target_type = "Enemy" if i < len(enemies) else "Globe"
-        print(f"\n[{i+1}/{len(all_targets)}] Targeting {target_type}...")
-        print(f"  Position: r={target[0]:.1f}cm, theta={target[1]:.3f}rad, z={target[2]:.1f}cm")
+    global auto_target_running
+    auto_target_running = True
+    
+    try:
+        # Fetch position data
+        print(f"Fetching JSON from {JSON_URL}")
+        position_data = fetchJson(JSON_URL)
             
-        azimuth, altitude = getFiringAngles(my_pos, target)
-        print(f"  azimuth={azimuth:.3f}rad, altitude={altitude:.3f}rad")
+        my_pos = getMePos(position_data, TEAM_NUMBER)
+        print(f"✓ current position: r={my_pos[0]:.1f}cm, theta={my_pos[1]:.3f}rad")
+            
+        enemies = getEnemyPos(position_data, TEAM_NUMBER)
+        globes = getGlobes(position_data)
+        all_targets = globes + enemies 
+            
+        print(f"{len(enemies)} enemy turrets and {len(globes)} globe found")
+        print(f"  Total targets: {len(all_targets)}")
+            
+        for i, target in enumerate(all_targets):
+            if not auto_target_running:
+                print("\n⚠️ Auto-targeting STOPPED by user")
+                break
                 
-        turret_state.move_to_position(azimuth, altitude)
+            target_type = "Globe" if i < len(globes) else "Enemy"
+            print(f"\n[{i+1}/{len(all_targets)}] Targeting {target_type}...")
+            print(f"  Position: r={target[0]:.1f}cm, theta={target[1]:.3f}rad, z={target[2]:.1f}cm")
+                
+            azimuth, altitude = getFiringAngles(my_pos, target)
+            azimuth += AZIMUTH_OFFSET  # Apply calibration offset
+            print(f"  azimuth={azimuth:.3f}rad, altitude={altitude:.3f}rad")
+                    
+            turret_state.move_to_position(azimuth, altitude)
+                
+            time.sleep(0.5)
             
-        time.sleep(0.5)
+            if not auto_target_running:
+                break
+                
+            print(f"  LASER ON")
+            turret_state.set_laser(True)
+            time.sleep(3.0)
+            turret_state.set_laser(False)
+            print(f"  Laser off")
+            time.sleep(0.5)
             
-        print(f"  LASER ON")
-        turret_state.set_laser(True)
-        time.sleep(3.0)
+        print("Targeting complete" if auto_target_running else "Targeting stopped")
+    finally:
+        auto_target_running = False
         turret_state.set_laser(False)
-        print(f"  Laser off")
-        time.sleep(0.5)
-        
-        print("Targeting complete")
         
    
 
@@ -268,6 +285,20 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'ok', 'message': 'Auto-targeting started'}).encode())
+            return
+        
+        # Stop auto-targeting
+        elif parsed.path == '/api/stop-target':
+            global auto_target_running
+            auto_target_running = False
+            turret_state.set_velocity(0, 0)
+            turret_state.set_laser(False)
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'ok', 'message': 'Auto-targeting stopped'}).encode())
             return
         
         # Fetch JSON from competition server
