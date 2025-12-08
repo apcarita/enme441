@@ -65,15 +65,22 @@ export class Turret {
         // Convert polar to Cartesian coordinates
         this.positionX = r * Math.cos(theta);
         this.positionZ = r * Math.sin(theta);
+        this.positionTheta = theta;
         
         if (this.base) {
             this.base.position.x = this.positionX;
             this.base.position.z = this.positionZ;
+            
+            // Rotate base so that azimuth=0 points toward field origin
+            // When at position theta, turret needs base rotation of theta + pi to face inward
+            this.base.rotation.y = theta + Math.PI;
         }
     }
 
     update(azimuth, altitude, laserOn) {
-        if (this.azimuthPart) this.azimuthPart.rotation.y = -azimuth; // Invert for intuitive control if needed
+        // Azimuth rotation is relative to the base orientation
+        // Base already points toward origin, so azimuth adds to that
+        if (this.azimuthPart) this.azimuthPart.rotation.y = azimuth;
         if (this.altitudePart) this.altitudePart.rotation.x = -altitude;
         if (this.laser) this.laser.visible = laserOn;
     }

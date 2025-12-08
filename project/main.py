@@ -103,7 +103,26 @@ class TurretState:
             self.laser_on = state
             GPIO.output(LASER_PIN, GPIO.HIGH if state else GPIO.LOW)
     
-    def calibrate(self):
+    def calibrate(self, point_to_origin=False):
+        """
+        Set current position as zero reference.
+        If point_to_origin=True, physically moves turret to point toward field origin first.
+        """
+        if point_to_origin:
+            # Calculate angle to point toward origin from turret position
+            # Turret at (r, theta) needs to point at angle theta + pi
+            my_pos = getMePos(fetchJson(JSON_URL, save_local=False), TEAM_NUMBER)
+            angle_to_origin = my_pos[1] + math.pi
+            
+            # Normalize to [-pi, pi]
+            while angle_to_origin > math.pi:
+                angle_to_origin -= 2 * math.pi
+            while angle_to_origin < -math.pi:
+                angle_to_origin += 2 * math.pi
+            
+            print(f"Moving to point toward origin (azimuth={angle_to_origin:.3f}rad)...")
+            self.move_to_position(angle_to_origin, 0.0)
+        
         with self.lock:
             self.azimuth = 0.0
             self.altitude = 0.0
@@ -265,7 +284,8 @@ class TurretHandler(BaseHTTPRequestHandler):
         
         # Calibration
         elif parsed.path == '/api/calibrate':
-            turret_state.calibrate()
+            point_to_origin = data.get('point_to_origin', True)
+            turret_state.calibrate(point_to_origin=point_to_origin)
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

@@ -32,6 +32,19 @@ async function init() {
     controls.target.set(x, 0, z);
   }
   
+  // Auto-calibrate on startup to point toward origin
+  console.log('🎯 Auto-calibrating turret to point toward origin...');
+  try {
+    await fetch('/api/calibrate', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ point_to_origin: true })
+    });
+    console.log('✅ Turret calibrated and pointing toward field origin');
+  } catch (error) {
+    console.error('Auto-calibration failed:', error);
+  }
+  
   // Sync with backend position on startup
   await syncWithBackend();
 }
@@ -222,15 +235,19 @@ altitudeSlider.addEventListener('input', (e) => {
 });
 
 btnCalibrate.addEventListener('click', async () => {
-  console.log('🎯 Calibrating - Setting Zero Position...');
+  console.log('🎯 Calibrating - Pointing toward origin and setting zero...');
   
   // Stop movement first
   sendVelocityCommand(0, 0);
   
   // Send calibration command to Python backend
   try {
-    await fetch('/api/calibrate', { method: 'POST' });
-    console.log('✅ Calibration complete');
+    await fetch('/api/calibrate', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ point_to_origin: true })
+    });
+    console.log('✅ Calibration complete - Turret now points toward field origin');
     // Sync with backend position
     await syncWithBackend();
   } catch (error) {
