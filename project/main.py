@@ -10,6 +10,8 @@ from shifter import Shifter
 import math
 from RPi import GPIO
 from command import fetchJson, getMePos, getEnemyPos, getGlobes, getFiringAngles
+import signal
+import sys
 
 PORT = 8080
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
@@ -189,6 +191,16 @@ class TurretState:
 # Global state
 turret_state = TurretState()
 auto_target_running = False
+server_instance = None
+
+def signal_handler(sig, frame):
+    """Handle shutdown signals (SIGINT, SIGTERM)"""
+    print(f"\nReceived signal {sig}, shutting down...")
+    if turret_state:
+        turret_state.shutdown()
+    if server_instance:
+        server_instance.shutdown()
+    sys.exit(0)
 
 def auto_target_sequence():
     global auto_target_running
@@ -417,7 +429,15 @@ class TurretHandler(BaseHTTPRequestHandler):
 
 def run_server():
     """Start the HTTP server"""
+    global server_instance
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     server = HTTPServer(('0.0.0.0', PORT), TurretHandler)
+    server_instance = server
+    
     print(f"Turret control server starting on port {PORT}")
     print(f"Mode: {'Development' if DEV_MODE else 'Production'}")
     
@@ -440,18 +460,15 @@ def run_server():
     
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nShutting down server...")
+    except (KeyboardInterrupt, SystemExit):
+        pass  # Handled by signal_handler
     finally:
-        # Always cleanup, even on unexpected errors
-        try:
-            turret_state.shutdown()
-        except Exception as e:
-            print(f"Error during turret shutdown: {e}")
-        try:
-            server.shutdown()
-        except Exception as e:
-            print(f"Error during server shutdown: {e}")
+        # Cleanup in case signal handler didn't run
+        if turret_state:
+            try:
+                turret_state.shutdown()
+            except Exception as e:
+                print(f"Error during turret shutdown: {e}")
 
 if __name__ == '__main__':
     run_server()
