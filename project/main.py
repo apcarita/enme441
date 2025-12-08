@@ -162,13 +162,24 @@ class TurretState:
                 self.altitude = target_altitude
     
     def shutdown(self):
+        print("Shutting down turret...")
         self.running = False
         self.set_velocity(0, 0)
         self.set_laser(False)
-        time.sleep(0.1)
+        time.sleep(0.2)
+        
+        # Turn off motors
         self.azimuth_motor.off()
         self.altitude_motor.off()
+        time.sleep(0.05)
+        
+        # Clear shift register completely
+        self.shifter.shiftByte(0b00000000)
+        time.sleep(0.05)
+        
+        # Clean up GPIO
         GPIO.cleanup()
+        print("Turret shutdown complete")
 
 # Global state
 turret_state = TurretState()
@@ -426,8 +437,16 @@ def run_server():
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down server...")
-        turret_state.shutdown()
-        server.shutdown()
+    finally:
+        # Always cleanup, even on unexpected errors
+        try:
+            turret_state.shutdown()
+        except Exception as e:
+            print(f"Error during turret shutdown: {e}")
+        try:
+            server.shutdown()
+        except Exception as e:
+            print(f"Error during server shutdown: {e}")
 
 if __name__ == '__main__':
     run_server()
