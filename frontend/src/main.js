@@ -32,19 +32,6 @@ async function init() {
     controls.target.set(x, 0, z);
   }
   
-  // Auto-calibrate on startup to point toward origin
-  console.log('🎯 Auto-calibrating turret to point toward origin...');
-  try {
-    await fetch('/api/calibrate', { 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ point_to_origin: true })
-    });
-    console.log('✅ Turret calibrated and pointing toward field origin');
-  } catch (error) {
-    console.error('Auto-calibration failed:', error);
-  }
-  
   // Sync with backend position on startup
   await syncWithBackend();
 }
