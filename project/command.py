@@ -45,10 +45,15 @@ def getFiringAngles(curPos, target):
     target = [target[0] * m.cos(target[1]), target[0] * m.sin(target[1]), target[2]]
 
     delta = [target[0] - cur[0], target[1] - cur[1], target[2] - zLaser]
-    # theata and phi angle between cur x,y,z and delta
-    theata = m.atan2(delta[1], delta[0])
-    phi = m.atan2(m.sqrt(delta[0]**2 + delta[1]**2), delta[2])
-    return theata, phi
+    
+    # Azimuth: angle in horizontal plane
+    azimuth = m.atan2(delta[1], delta[0])
+    
+    # Altitude: elevation angle from horizontal (not zenith angle)
+    horizontal_dist = m.sqrt(delta[0]**2 + delta[1]**2)
+    altitude = m.atan2(delta[2], horizontal_dist)  # Positive = up, negative = down
+    
+    return azimuth, altitude
 
 
 # For testing, load local JSON file instead of remote fetch

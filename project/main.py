@@ -344,8 +344,11 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_error(500, f'Error reading file: {str(e)}')
     
     def log_message(self, format, *args):
-        """Custom log format"""
-        print(f"[{self.date_time_string()}] {format % args}")
+        """Custom log format - suppress position polling spam"""
+        message = format % args
+        # Don't log position polling requests
+        if '/api/position' not in message:
+            print(f"[{self.date_time_string()}] {message}")
 
 def run_server():
     """Start the HTTP server"""
