@@ -17,7 +17,6 @@ DEV_MODE = not os.path.exists(FRONTEND_DIR)
 LASER_PIN = 17
 TEAM_NUMBER = '13' 
 JSON_URL = 'http://192.168.1.254:8000/positions.json'
-AZIMUTH_OFFSET = 0.0  # Adjust during calibration if needed (radians)
 
 # Setup laser pin
 GPIO.setup(LASER_PIN, GPIO.OUT)
@@ -185,7 +184,6 @@ def auto_target_sequence():
             print(f"  Position: r={target[0]:.1f}cm, theta={target[1]:.3f}rad, z={target[2]:.1f}cm")
                 
             azimuth, altitude = getFiringAngles(my_pos, target)
-            azimuth += AZIMUTH_OFFSET  # Apply calibration offset
             print(f"  azimuth={azimuth:.3f}rad, altitude={altitude:.3f}rad")
                     
             turret_state.move_to_position(azimuth, altitude)

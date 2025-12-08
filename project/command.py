@@ -31,7 +31,7 @@ def getEnemyPos(json,me):
     enemy_positions = []
     for id,pos in turrets.items():
         if id != str(me):
-            enemy_positions.append([pos['r'], pos['theta'], 8])
+            enemy_positions.append([pos['r'], pos['theta'], 6.16])  # 101.6mm turret height
     return enemy_positions
 
 def getGlobes(json):
@@ -40,41 +40,35 @@ def getGlobes(json):
 
 def getFiringAngles(curPos, target):
     """
-    Calculate firing angles relative to turret's local frame.
-    Assumes turret's zero azimuth points toward field center (theta=0).
-    """
-    zLaser = 0.9911  # Laser height in cm
+    Calculate firing angles for the turret.
+    Assumes turret's azimuth=0 points toward field origin (theta=0 direction).
     
-    # Convert polar to Cartesian
-    cur_x = curPos[0] * m.cos(curPos[1])
-    cur_y = curPos[0] * m.sin(curPos[1])
+    Calibration: Point turret toward the marked field origin and press "Set Zero"
+    """
+    LASER_HEIGHT = 9.911  # cm (calibrated laser height above ground)
+    
+    # Convert polar coordinates to Cartesian (x, y, z)
+    # Using standard math convention: x = r*cos(theta), y = r*sin(theta)
+    turret_x = curPos[0] * m.cos(curPos[1])
+    turret_y = curPos[0] * m.sin(curPos[1])
+    turret_z = LASER_HEIGHT
     
     target_x = target[0] * m.cos(target[1])
     target_y = target[0] * m.sin(target[1])
     target_z = target[2]
     
-    # Delta in global frame
-    delta_x = target_x - cur_x
-    delta_y = target_y - cur_y
-    delta_z = target_z - zLaser
+    # Vector from turret to target
+    delta_x = target_x - turret_x
+    delta_y = target_y - turret_y
+    delta_z = target_z - turret_z
     
-    # Calculate angle in global frame
-    global_azimuth = m.atan2(delta_y, delta_x)
-    
-    # Convert to turret's local frame
-    # Assuming turret's zero points toward field center (at angle = turret_theta + pi)
-    turret_facing = curPos[1] + m.pi  # Turret faces outward from center
-    azimuth = global_azimuth - turret_facing
-    
-    # Normalize to [-pi, pi]
-    while azimuth > m.pi:
-        azimuth -= 2 * m.pi
-    while azimuth < -m.pi:
-        azimuth += 2 * m.pi
+    # Azimuth: angle in horizontal plane (XY)
+    # atan2(y, x) gives angle from positive x-axis
+    azimuth = m.atan2(delta_y, delta_x)
     
     # Altitude: elevation angle from horizontal
-    horizontal_dist = m.sqrt(delta_x**2 + delta_y**2)
-    altitude = m.atan2(delta_z, horizontal_dist)
+    horizontal_distance = m.sqrt(delta_x**2 + delta_y**2)
+    altitude = m.atan2(delta_z, horizontal_distance)
     
     return azimuth, altitude
 
