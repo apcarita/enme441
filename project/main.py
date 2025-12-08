@@ -8,10 +8,19 @@ import os
 from stepperS import Stepper, interleave_rotate
 from shifter import Shifter
 import math
+from RPi import GPIO
+from command import fetchJson, getMePos, getEnemyPos, getGlobes, getFiringAngles
 
 PORT = 8080
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
 DEV_MODE = not os.path.exists(FRONTEND_DIR)  
+LASER_PIN = 17
+TEAM_NUMBER = '13' 
+JSON_URL = 'http://192.168.1.254:8000/positions.json'
+
+# Setup laser pin
+GPIO.setup(LASER_PIN, GPIO.OUT)
+GPIO.output(LASER_PIN, GPIO.LOW)
 
 # Motor state
 class TurretState:
@@ -92,15 +101,96 @@ class TurretState:
     def set_laser(self, state):
         with self.lock:
             self.laser_on = state
-            #add laser stuff
+            GPIO.output(LASER_PIN, GPIO.HIGH if state else GPIO.LOW)
     
     def calibrate(self):
         with self.lock:
             self.azimuth = 0.0
             self.altitude = 0.0
+    
+    def move_to_position(self, target_azimuth, target_altitude):
+        """Move to absolute position (blocking call)"""
+        # Stop any velocity-based movement
+        self.set_velocity(0, 0)
+        
+        with self.lock:
+            current_az = self.azimuth
+            current_alt = self.altitude
+        
+        # Calculate movement needed
+        delta_az = target_azimuth - current_az
+        delta_alt = target_altitude - current_alt
+        
+        # Convert to degrees
+        az_deg = math.degrees(delta_az)
+        alt_deg = math.degrees(delta_alt)
+        
+        # Execute movement
+        if az_deg != 0 or alt_deg != 0:
+            interleave_rotate(
+                [self.azimuth_motor, self.altitude_motor],
+                [az_deg, alt_deg]
+            )
+            
+            # Wait for last step to complete before de-energizing
+            time.sleep(Stepper.delay * 2)
+            
+            self.azimuth_motor.off()
+            self.altitude_motor.off()
+            
+            with self.lock:
+                self.azimuth = target_azimuth
+                self.altitude = target_altitude
+    
+    def shutdown(self):
+        self.running = False
+        self.set_velocity(0, 0)
+        self.set_laser(False)
+        time.sleep(0.1)
+        self.azimuth_motor.off()
+        self.altitude_motor.off()
+        GPIO.cleanup()
 
 # Global state
 turret_state = TurretState()
+
+def auto_target_sequence():
+    # Fetch position data
+    print(f"Fetching JSON from {JSON_URL}")
+    position_data = fetchJson(JSON_URL)
+        
+    my_pos = getMePos(position_data, TEAM_NUMBER)
+    print(f"✓ current position: r={my_pos[0]:.1f}cm, theta={my_pos[1]:.3f}rad")
+        
+    enemies = getEnemyPos(position_data, TEAM_NUMBER)
+    globes = getGlobes(position_data)
+    all_targets = globes + enemies 
+        
+    print(f"{len(enemies)} enemy turrets and {len(globes)} globe found")
+    print(f"  Total targets: {len(all_targets)}")
+        
+    for i, target in enumerate(all_targets):
+        target_type = "Enemy" if i < len(enemies) else "Globe"
+        print(f"\n[{i+1}/{len(all_targets)}] Targeting {target_type}...")
+        print(f"  Position: r={target[0]:.1f}cm, theta={target[1]:.3f}rad, z={target[2]:.1f}cm")
+            
+        azimuth, altitude = getFiringAngles(my_pos, target)
+        print(f"  azimuth={azimuth:.3f}rad, altitude={altitude:.3f}rad")
+                
+        turret_state.move_to_position(azimuth, altitude)
+            
+        time.sleep(0.5)
+            
+        print(f"  LASER ON")
+        turret_state.set_laser(True)
+        time.sleep(3.0)
+        turret_state.set_laser(False)
+        print(f"  Laser off")
+        time.sleep(0.5)
+        
+        print("Targeting complete")
+        
+   
 
 class TurretHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -167,6 +257,35 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'ok', 'message': 'Calibrated to zero'}).encode())
+            return
+        
+        # Auto-targeting sequence
+        elif parsed.path == '/api/auto-target':
+            threading.Thread(target=auto_target_sequence, daemon=True).start()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'ok', 'message': 'Auto-targeting started'}).encode())
+            return
+        
+        # Fetch JSON from competition server
+        elif parsed.path == '/api/fetch-json':
+            try:
+                data = fetchJson(JSON_URL, save_local=True)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'status': 'ok', 
+                    'message': 'JSON fetched and saved',
+                    'data': data
+                }).encode())
+            except Exception as e:
+                self.send_error(500, f'Failed to fetch JSON: {str(e)}')
             return
         
         self.send_error(404, 'Endpoint not found')
@@ -247,12 +366,15 @@ def run_server():
     print(f"  POST /api/move - Set velocity (azimuth: -1/0/1, altitude: -1/0/1)")
     print(f"  POST /api/laser - Control laser")
     print(f"  POST /api/calibrate - Calibrate to zero")
+    print(f"  POST /api/fetch-json - Fetch and save competition JSON")
+    print(f"  POST /api/auto-target - Start automated targeting sequence")
     print(f"  GET  /api/position - Get current position (polled at 10Hz)")
     
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down server...")
+        turret_state.shutdown()
         server.shutdown()
 
 if __name__ == '__main__':

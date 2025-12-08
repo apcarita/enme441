@@ -4,7 +4,6 @@ import { Turret } from './turret.js';
 import { Field } from './field.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-// Team Configuration
 const TEAM_NUMBER = 13;
 
 const app = document.querySelector('#app');
@@ -49,6 +48,7 @@ const altitudeSlider = document.getElementById('altitude-slider');
 const azimuthVal = document.getElementById('azimuth-val');
 const altitudeVal = document.getElementById('altitude-val');
 const btnCalibrate = document.getElementById('btn-calibrate');
+const btnFetch = document.getElementById('btn-fetch');
 const btnAuto = document.getElementById('btn-auto');
 
 // State
@@ -237,6 +237,29 @@ btnCalibrate.addEventListener('click', async () => {
   }
 });
 
+btnFetch.addEventListener('click', async () => {
+  console.log('📡 Fetching competition positions...');
+  btnFetch.disabled = true;
+  btnFetch.textContent = 'Fetching...';
+  
+  try {
+    const response = await fetch('/api/fetch-json', { method: 'POST' });
+    const result = await response.json();
+    
+    console.log('✅ Positions fetched and saved');
+    
+    // Reload the field visualization with new data
+    await field.load('/positions.json');
+    console.log('✅ Field updated with new positions');
+    
+  } catch (error) {
+    console.error('❌ Failed to fetch positions:', error);
+  } finally {
+    btnFetch.disabled = false;
+    btnFetch.textContent = 'Fetch Positions';
+  }
+});
+
 let autoTargeting = false;
 
 btnAuto.addEventListener('click', async () => {
@@ -251,54 +274,31 @@ btnAuto.addEventListener('click', async () => {
   
   console.log('🎯 Starting Auto-Target Sequence...');
   
-  // Reload positions
-  const positionData = await field.load('/positions.json');
-  
-  // TODO: Implement actual targeting calculations
-  // This is a placeholder - you'll need to:
-  // 1. Get your own turret position from positions.json
-  // 2. Calculate azimuth/altitude to each target
-  // 3. Aim and fire for 3 seconds at each target
-  
-  /* Example auto-target sequence (implement when ready):
   try {
-    const response = await fetch('/positions.json');
-    const data = await response.json();
+    // Call backend to execute automated targeting
+    const response = await fetch('/api/auto-target', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
     
-    // Example: Fire at first 3 targets
-    const targets = [
-      { az: 1.0, alt: 0.3 },
-      { az: 2.0, alt: 0.4 },
-      { az: 3.0, alt: 0.2 }
-    ];
+    const result = await response.json();
+    console.log('✓ Auto-target sequence initiated:', result.message);
+    console.log('  Backend is now fetching targets and firing...');
+    console.log('  Check terminal for detailed progress');
     
-    for (const target of targets) {
-      console.log(`Targeting: az=${target.az}, alt=${target.alt}`);
-      await setMotorAngles(target.az, target.alt);
-      await new Promise(resolve => setTimeout(resolve, 500)); // Aim delay
-      
-      // Fire for 3 seconds
-      await setLaserState(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      // Laser auto-turns off after 3 seconds
-      
-      await new Promise(resolve => setTimeout(resolve, 500)); // Delay between targets
-    }
+    // Note: The sequence runs asynchronously on the backend
+    // UI will update via the position polling
     
-    console.log('✅ Auto-target sequence complete');
   } catch (error) {
-    console.error('Auto-target failed:', error);
+    console.error('❌ Failed to start auto-target:', error);
   }
-  */
   
-  // For now, just demonstrate the laser timer
-  console.log('Demo: Firing laser for 3 seconds...');
-  await setLaserState(true);
-  await new Promise(resolve => setTimeout(resolve, 3100)); // Wait for auto-shutoff
-  
-  autoTargeting = false;
-  btnAuto.disabled = false;
-  btnAuto.textContent = 'Start Auto-Target';
+  // Re-enable button after a short delay (sequence runs on backend)
+  setTimeout(() => {
+    autoTargeting = false;
+    btnAuto.disabled = false;
+    btnAuto.textContent = 'Start Auto-Target';
+  }, 2000);
 });
 
 // Animation Loop

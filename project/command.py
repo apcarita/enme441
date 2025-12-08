@@ -1,10 +1,25 @@
 import requests
 import math as m
-import json 
+import json
+import os
 
-def fetchJson(url):
-    response = requests.get(url)
-    return response.json()
+def fetchJson(url, save_local=True):
+    fallback_path = os.path.join(os.path.dirname(__file__), '../frontend/public/positions.json')
+    
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        # Save to local file so frontend visualization matches
+        if save_local:
+            with open(fallback_path, 'w') as f:
+                json.dump(data, f, indent=2)        
+        return data
+    except Exception as e:
+        print(f'Failed to fetch from {url}: {e}')
+        print('Falling back to local JSON file')
+        with open(fallback_path, 'r') as f:
+            return json.load(f)
 
 def getMePos(json,id):
     turrets = json['turrets']
