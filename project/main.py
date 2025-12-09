@@ -16,7 +16,7 @@ import sys
 PORT = 8080
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
 DEV_MODE = not os.path.exists(FRONTEND_DIR)  
-LASER_PIN = 17
+LASER_PIN = 22
 TEAM_NUMBER = '13' 
 JSON_URL = 'http://192.168.1.254:8000/positions.json'
 
@@ -37,7 +37,7 @@ class TurretState:
         self.altitude_velocity = 0.0  # -1, 0, or 1
         
         # Initialize hardware
-        self.shifter = Shifter(data=2, latch=3, clock=4)
+        self.shifter = Shifter(data=17, latch=27, clock=4)
         self.azimuth_motor = Stepper(self.shifter, bit_offset=4)  # QE-QH
         self.altitude_motor = Stepper(self.shifter, bit_offset=0)  # QA-QD
         
