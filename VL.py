@@ -17,7 +17,7 @@ try:
         distance_mm = vl53.range
         distance_cm = distance_mm / 10.0
         
-        print(f"Distance: {distance_cm:6.1f} cm ({distance_mm:4.0f} mm)")
+        print(f"\rDistance: {distance_cm:6.1f} cm ({distance_mm:4.0f} mm)", end='', flush=True)
         
         time.sleep(0.1)
 
