@@ -10,6 +10,7 @@ export class Turret {
         this.laser = null;
         this.positionX = 0;
         this.positionZ = 0;
+        this.positioned = false;
 
         this.init();
     }
@@ -61,7 +62,7 @@ export class Turret {
         this.altitudePart.add(this.laser);
     }
 
-    setPosition(x, z, angleToOrigin) {
+    setPosition(x, z, angleToOrigin = null) {
         this.positionX = x;
         this.positionZ = z;
         
@@ -69,11 +70,13 @@ export class Turret {
             this.base.position.x = x;
             this.base.position.z = z;
             
-            // In Three.js, rotation.y = atan2(x, z) makes object face toward (x,z)
-            // So to face origin from position (x,z), use atan2(-z, -x)
-            // But we need atan2(x, z) format for Three.js, so: atan2(-x, -z)
+            // Rotate base to face origin (turret's zero position)
+            // In Three.js Y-up coordinates: rotation.y = atan2(-x, -z) points toward origin
             this.base.rotation.y = Math.atan2(-x, -z);
-            console.log(`Turret at (${x.toFixed(1)}, ${z.toFixed(1)}), rotation=${this.base.rotation.y.toFixed(3)}`);
+            
+            const r = Math.sqrt(x*x + z*z);
+            const theta = Math.atan2(z, x);
+            console.log(`Turret positioned at r=${r.toFixed(1)}cm, theta=${theta.toFixed(3)}rad (${(theta*180/Math.PI).toFixed(1)}°)`);
         }
     }
 

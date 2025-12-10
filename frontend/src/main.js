@@ -66,15 +66,22 @@ async function syncWithBackend() {
     altitudeVal.textContent = data.turret.altitude.toFixed(2) + ' rad';
     laserToggle.checked = data.turret.laser;
     
-    // Position our turret (first time only)
-    if (data.my_position && !turret.positioned) {
-      turret.setPosition(data.my_position.x, data.my_position.z, data.my_position.angle_to_origin);
-      turret.positioned = true;
+    // Position our turret (update if position changed)
+    if (data.my_position) {
+      const posChanged = !turret.positioned || 
+                        Math.abs(turret.positionX - data.my_position.x) > 0.1 || 
+                        Math.abs(turret.positionZ - data.my_position.z) > 0.1;
       
-      // Update camera
-      camera.position.set(data.my_position.x, 200, data.my_position.z + 400);
-      camera.lookAt(data.my_position.x, 0, data.my_position.z);
-      controls.target.set(data.my_position.x, 0, data.my_position.z);
+      if (posChanged) {
+        turret.setPosition(data.my_position.x, data.my_position.z, data.my_position.angle_to_origin);
+        
+        // Update camera on position change
+        camera.position.set(data.my_position.x, 200, data.my_position.z + 400);
+        camera.lookAt(data.my_position.x, 0, data.my_position.z);
+        controls.target.set(data.my_position.x, 0, data.my_position.z);
+        
+        turret.positioned = true;
+      }
     }
     
     // Update field visualization

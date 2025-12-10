@@ -74,10 +74,10 @@ def getFiringAngles(curPos, target):
 
 if __name__ == "__main__":
     # For testing, load local JSON file instead of remote fetch
-    with open('frontend/public/positions.json', 'r') as f:
-        positions_data = json.load(f)
+    #with open('frontend/public/positions.json', 'r') as f:
+       # positions_data = json.load(f)
 
-    #positions_data = fetchJson("")
+    positions_data = fetchJson("http://192.168.1.254:8000/positions.json")
 
     print("current location: ")
     print(getMePos(positions_data, '13'))
