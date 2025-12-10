@@ -2,7 +2,7 @@
 # Start development servers
 
 echo "NOTOOTOTOOTOTO..."
-echo "" ython backend server on port 8080..."
+echo " ython backend server on port 8080..."
 cd /home/jtacchetti/final_project/enme441/frontend
 python3 project/main.py &
 BACKEND_PID=$!
