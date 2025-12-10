@@ -2,8 +2,7 @@
 # Start development servers
 
 echo "Starting Turret Control System..."
-echo ""
-echo "Starting Python backend server on port 8080..."
+echo "" ython backend server on port 8080..."
 cd /home/adam/enme441
 python3 project/main.py &
 BACKEND_PID=$!
