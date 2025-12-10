@@ -87,7 +87,7 @@ class TurretState:
                 new_alt = max(-1.57, min(1.57, new_alt))
                 
                 # Move motors
-                az_deg = math.degrees(new_az - self.azimuth)
+                az_deg = -math.degrees(new_az - self.azimuth)  # Negate for correct direction
                 alt_deg = math.degrees(new_alt - self.altitude)
                 
                 if az_deg != 0 or alt_deg != 0:
@@ -140,7 +140,7 @@ class TurretState:
         delta_alt = target_altitude - current_alt
         
         # Convert to degrees
-        az_deg = math.degrees(delta_az)
+        az_deg = -math.degrees(delta_az)  # Negate for correct direction
         alt_deg = math.degrees(delta_alt)
         
         # Execute movement
