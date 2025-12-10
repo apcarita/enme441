@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start development servers
 
-echo "Starting Turret Control System..."
+echo "Starting TTHIS IS DIFFERENT urret Control System..."
 echo "" ython backend server on port 8080..."
 cd /home/adam/enme441
 python3 project/main.py &
