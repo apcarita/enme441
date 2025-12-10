@@ -11,7 +11,7 @@ sleep 2
 
 echo ""
 echo "Starting Vite frontend dev server..."
-cd /home/jtacchetti/final_project/enme441
+cd /home/jtacchetti/final_project/enme441/frontend
 npm run dev -- --host &
 FRONTEND_PID=$!
 
