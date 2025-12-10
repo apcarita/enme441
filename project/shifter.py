@@ -1,6 +1,9 @@
 # Shift register class
 
-from RPi import GPIO
+try:
+    from RPi import GPIO
+except (ImportError, RuntimeError):
+    import mock_gpio as GPIO
 from time import sleep
 
 GPIO.setmode(GPIO.BCM)

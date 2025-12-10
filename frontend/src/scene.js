@@ -31,6 +31,21 @@ export function createScene() {
   const gridHelper = new THREE.GridHelper(800, 20, 0x444444, 0x333333);
   scene.add(gridHelper);
 
+  // Origin marker (bright cylinder at 0,0)
+  const originGeo = new THREE.CylinderGeometry(10, 10, 50, 32);
+  const originMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00 });
+  const originMarker = new THREE.Mesh(originGeo, originMat);
+  originMarker.position.set(0, 25, 0);
+  scene.add(originMarker);
+
+  // Circle showing r=300cm boundary
+  const circleGeo = new THREE.RingGeometry(298, 302, 64);
+  const circleMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
+  const circle = new THREE.Mesh(circleGeo, circleMat);
+  circle.rotation.x = -Math.PI / 2;
+  circle.position.y = 0.5;
+  scene.add(circle);
+
   // Floor (Larger)
   const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
   const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });

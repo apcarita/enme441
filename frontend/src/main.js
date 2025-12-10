@@ -15,24 +15,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 const turret = new Turret(scene, TEAM_NUMBER);
-const field = new Field(scene, TEAM_NUMBER);
+const field = new Field(scene);
 
-// Load mock data and position turret
+// Initialize - sync with backend
 async function init() {
-  const positionData = await field.load('/positions.json');
-  if (positionData && positionData.turrets && positionData.turrets[TEAM_NUMBER]) {
-    const ourPosition = positionData.turrets[TEAM_NUMBER];
-    turret.setPosition(ourPosition.r, ourPosition.theta);
-    
-    // Update camera to look at our turret position
-    const x = ourPosition.r * Math.cos(ourPosition.theta);
-    const z = ourPosition.r * Math.sin(ourPosition.theta);
-    camera.position.set(x, 200, z + 400);
-    camera.lookAt(x, 0, z);
-    controls.target.set(x, 0, z);
-  }
-  
-  // Sync with backend position on startup
   await syncWithBackend();
 }
 
@@ -49,6 +35,7 @@ const azimuthVal = document.getElementById('azimuth-val');
 const altitudeVal = document.getElementById('altitude-val');
 const btnCalibrate = document.getElementById('btn-calibrate');
 const btnFetch = document.getElementById('btn-fetch');
+const btnFire = document.getElementById('btn-fire');
 const btnAuto = document.getElementById('btn-auto');
 const btnStop = document.getElementById('btn-stop');
 
@@ -62,22 +49,39 @@ let state = {
 let laserTimer = null;
 let laserCountdownInterval = null;
 
-// Sync position with backend
+// Sync all data with backend
 async function syncWithBackend() {
   try {
     const response = await fetch('/api/position');
     const data = await response.json();
     
-    // Update UI to match backend position
-    state.azimuth = data.azimuth;
-    state.altitude = data.altitude;
-    state.laserOn = data.laser;
+    // Update turret state
+    state.azimuth = data.turret.azimuth;
+    state.altitude = data.turret.altitude;
+    state.laserOn = data.turret.laser;
     
-    azimuthSlider.value = data.azimuth;
-    altitudeSlider.value = data.altitude;
-    azimuthVal.textContent = data.azimuth.toFixed(2) + ' rad';
-    altitudeVal.textContent = data.altitude.toFixed(2) + ' rad';
-    laserToggle.checked = data.laser;
+    azimuthSlider.value = data.turret.azimuth;
+    altitudeSlider.value = data.turret.altitude;
+    azimuthVal.textContent = data.turret.azimuth.toFixed(2) + ' rad';
+    altitudeVal.textContent = data.turret.altitude.toFixed(2) + ' rad';
+    laserToggle.checked = data.turret.laser;
+    
+    // Position our turret (first time only)
+    if (data.my_position && !turret.positioned) {
+      turret.setPosition(data.my_position.x, data.my_position.z, data.my_position.angle_to_origin);
+      turret.positioned = true;
+      
+      // Update camera
+      camera.position.set(data.my_position.x, 200, data.my_position.z + 400);
+      camera.lookAt(data.my_position.x, 0, data.my_position.z);
+      controls.target.set(data.my_position.x, 0, data.my_position.z);
+    }
+    
+    // Update field visualization
+    if (data.enemies && data.globes) {
+      console.log(`Rendering ${data.enemies.length} enemies, ${data.globes.length} globes`);
+      field.update(data.enemies, data.globes);
+    }
     
     return data;
   } catch (error) {
@@ -134,12 +138,11 @@ function updateVelocity() {
   }
 }
 
-// Laser Control Functions
+// Laser Control
 async function setLaserState(isOn) {
   state.laserOn = isOn;
   laserToggle.checked = isOn;
   
-  // Send to Python backend
   try {
     await fetch('/api/laser', {
       method: 'POST',
@@ -151,13 +154,9 @@ async function setLaserState(isOn) {
   }
   
   if (isOn) {
-    console.log('🔴 Laser ON - Auto-shutoff in 3 seconds');
-    
-    // Show visual feedback
     laserControl.classList.add('laser-active');
     laserWarning.classList.add('active');
     
-    // Countdown timer display
     let timeLeft = 3;
     laserTimerDisplay.textContent = timeLeft;
     
@@ -170,19 +169,11 @@ async function setLaserState(isOn) {
       }
     }, 100);
     
-    // Auto-shutoff after 3 seconds (competition rule)
-    laserTimer = setTimeout(() => {
-      setLaserState(false);
-      console.log('⚫ Laser AUTO-OFF (3 second limit)');
-    }, 3000);
+    laserTimer = setTimeout(() => setLaserState(false), 3000);
   } else {
-    console.log('⚫ Laser OFF');
-    
-    // Hide visual feedback
     laserControl.classList.remove('laser-active');
     laserWarning.classList.remove('active');
     
-    // Clear timers
     if (laserTimer) {
       clearTimeout(laserTimer);
       laserTimer = null;
@@ -200,7 +191,6 @@ laserToggle.addEventListener('change', (e) => {
 });
 
 function sendVelocityCommand(azimuthVel, altitudeVel) {
-  // Send velocity to Python backend (fire and forget)
   fetch('/api/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -210,89 +200,58 @@ function sendVelocityCommand(azimuthVel, altitudeVel) {
   });
 }
 
-// Sliders temporarily disabled - use keyboard controls
-azimuthSlider.addEventListener('input', (e) => {
-  // Slider control disabled in velocity mode
-  console.log('Use arrow keys for control');
-});
-
-altitudeSlider.addEventListener('input', (e) => {
-  // Slider control disabled in velocity mode
-  console.log('Use arrow keys for control');
-});
-
 btnCalibrate.addEventListener('click', async () => {
-  console.log('🎯 Calibrating - Pointing toward origin and setting zero...');
-  
-  // Stop movement first
   sendVelocityCommand(0, 0);
-  
-  // Send calibration command to Python backend
   try {
-    await fetch('/api/calibrate', { 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ point_to_origin: true })
-    });
-    console.log('✅ Calibration complete - Turret now points toward field origin');
-    // Sync with backend position
+    await fetch('/api/calibrate', { method: 'POST' });
     await syncWithBackend();
   } catch (error) {
-    console.error('Failed to calibrate:', error);
+    console.error('Calibration failed:', error);
   }
 });
 
 btnFetch.addEventListener('click', async () => {
-  console.log('📡 Fetching competition positions...');
   btnFetch.disabled = true;
   btnFetch.textContent = 'Fetching...';
-  
   try {
-    const response = await fetch('/api/fetch-json', { method: 'POST' });
-    const result = await response.json();
-    
-    console.log('✅ Positions fetched and saved');
-    
-    // Reload the field visualization with new data
-    await field.load('/positions.json');
-    console.log('✅ Field updated with new positions');
-    
+    await fetch('/api/fetch-json', { method: 'POST' });
   } catch (error) {
-    console.error('❌ Failed to fetch positions:', error);
+    console.error('Fetch failed:', error);
   } finally {
     btnFetch.disabled = false;
     btnFetch.textContent = 'Fetch Positions';
   }
 });
 
+btnFire.addEventListener('click', async () => {
+  if (state.laserOn) return; // Already firing
+  
+  btnFire.disabled = true;
+  btnFire.textContent = 'Firing...';
+  
+  // Fire for 3 seconds
+  await setLaserState(true);
+  
+  // Re-enable button after complete
+  setTimeout(() => {
+    btnFire.disabled = false;
+    btnFire.textContent = '🔴 Fire Laser (3s)';
+  }, 3100); // Slightly longer than laser duration
+});
+
 let autoTargeting = false;
 
 btnAuto.addEventListener('click', async () => {
-  if (autoTargeting) {
-    console.log('⚠️ Auto-targeting already in progress');
-    return;
-  }
+  if (autoTargeting) return;
   
   autoTargeting = true;
   btnAuto.style.display = 'none';
   btnStop.style.display = 'inline-block';
   
-  console.log('🎯 Starting Auto-Target Sequence...');
-  
   try {
-    // Call backend to execute automated targeting
-    const response = await fetch('/api/auto-target', { 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    const result = await response.json();
-    console.log('✓ Auto-target sequence initiated:', result.message);
-    console.log('  Backend is now fetching targets and firing...');
-    console.log('  Check terminal for detailed progress');
-    
+    await fetch('/api/auto-target', { method: 'POST' });
   } catch (error) {
-    console.error('❌ Failed to start auto-target:', error);
+    console.error('Failed to start auto-target:', error);
     autoTargeting = false;
     btnAuto.style.display = 'inline-block';
     btnStop.style.display = 'none';
@@ -300,16 +259,10 @@ btnAuto.addEventListener('click', async () => {
 });
 
 btnStop.addEventListener('click', async () => {
-  console.log('⚠️ Stopping auto-target sequence...');
-  
   try {
-    await fetch('/api/stop-target', { 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    console.log('✓ Stop command sent');
+    await fetch('/api/stop-target', { method: 'POST' });
   } catch (error) {
-    console.error('❌ Failed to stop:', error);
+    console.error('Failed to stop:', error);
   }
   
   autoTargeting = false;

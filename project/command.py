@@ -3,23 +3,20 @@ import math as m
 import json
 import os
 
-def fetchJson(url, save_local=True):
+def fetchJson(url, save_local=False):
     fallback_path = os.path.join(os.path.dirname(__file__), '../frontend/public/positions.json')
     
     try:
         response = requests.get(url, timeout=5)
-        data = response.json()
-        
-        # Save to local file so frontend visualization matches
-        if save_local:
-            with open(fallback_path, 'w') as f:
-                json.dump(data, f, indent=2)        
-        return data
+        return response.json()
     except Exception as e:
         print(f'Failed to fetch from {url}: {e}')
-        print('Falling back to local JSON file')
-        with open(fallback_path, 'r') as f:
-            return json.load(f)
+        # Try fallback file if it exists
+        if os.path.exists(fallback_path):
+            print('Using fallback local JSON file')
+            with open(fallback_path, 'r') as f:
+                return json.load(f)
+        raise
 
 def getMePos(json,id):
     turrets = json['turrets']
@@ -31,7 +28,7 @@ def getEnemyPos(json,me):
     enemy_positions = []
     for id,pos in turrets.items():
         if id != str(me):
-            enemy_positions.append([pos['r'], pos['theta'], 6.16])  # 101.6mm turret height
+            enemy_positions.append([pos['r'], pos['theta'], 6.16])  
     return enemy_positions
 
 def getGlobes(json):
@@ -39,16 +36,10 @@ def getGlobes(json):
     return [[globe['r'], globe['theta'], globe['z']] for globe in globes]
 
 def getFiringAngles(curPos, target):
-    """
-    Calculate firing angles for the turret.
-    Assumes turret's azimuth=0 points toward field origin (theta=0 direction).
-    
-    Calibration: Point turret toward the marked field origin and press "Set Zero"
-    """
-    LASER_HEIGHT = 9.911  # cm (calibrated laser height above ground)
+    LASER_HEIGHT = 9.911  # cm - height of laser above ground 
     
     # Convert polar coordinates to Cartesian (x, y, z)
-    # Using standard math convention: x = r*cos(theta), y = r*sin(theta)
+    # x = r*cos(theta), y = r*sin(theta)
     turret_x = curPos[0] * m.cos(curPos[1])
     turret_y = curPos[0] * m.sin(curPos[1])
     turret_z = LASER_HEIGHT
@@ -62,34 +53,43 @@ def getFiringAngles(curPos, target):
     delta_y = target_y - turret_y
     delta_z = target_z - turret_z
     
-    # Azimuth: angle in horizontal plane (XY)
-    # atan2(y, x) gives angle from positive x-axis
-    azimuth = m.atan2(delta_y, delta_x)
+    # Absolute angle from turret to target
+    target_angle = m.atan2(delta_y, delta_x)
     
-    # Altitude: elevation angle from horizontal
-    horizontal_distance = m.sqrt(delta_x**2 + delta_y**2)
-    altitude = m.atan2(delta_z, horizontal_distance)
+    # Turret's zero position points toward origin (theta + pi)
+    turret_zero = curPos[1] + m.pi
+    
+    # Relative azimuth (turret needs to rotate from zero to target)
+    azimuth = turret_zero - target_angle
+    while azimuth > m.pi:
+        azimuth -= 2 * m.pi
+    while azimuth < -m.pi:
+        azimuth += 2 * m.pi
+    
+    # Altitude (no reference needed, turret starts level)
+    altitude = m.atan2(delta_z, m.sqrt(delta_x**2 + delta_y**2))
     
     return azimuth, altitude
 
 
-# For testing, load local JSON file instead of remote fetch
-with open('frontend/public/positions.json', 'r') as f:
-    positions_data = json.load(f)
+if __name__ == "__main__":
+    # For testing, load local JSON file instead of remote fetch
+    with open('frontend/public/positions.json', 'r') as f:
+        positions_data = json.load(f)
 
-#positions_data = fetchJson("")
+    #positions_data = fetchJson("")
 
-print("current location: ")
-print(getMePos(positions_data, '13'))
+    print("current location: ")
+    print(getMePos(positions_data, '13'))
 
-print("\n emmnies at: ")
-print(getEnemyPos(positions_data, '13'))
+    print("\n emmnies at: ")
+    print(getEnemyPos(positions_data, '13'))
 
-# Compute firing angles for each enemy
-me_pos = getMePos(positions_data, '13')
-enemies = getEnemyPos(positions_data, '13')
-for i, enemy in enumerate(enemies):
-    theta, phi = getFiringAngles(me_pos, enemy)
-    print(f"Angles to enemy {i+1}: theta={theta}, phi={phi}")
+    # Compute firing angles for each enemy
+    me_pos = getMePos(positions_data, '13')
+    enemies = getEnemyPos(positions_data, '13')
+    for i, enemy in enumerate(enemies):
+        theta, phi = getFiringAngles(me_pos, enemy)
+        print(f"Angles to enemy {i+1}: theta={theta}, phi={phi}")
 
 

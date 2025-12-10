@@ -1,6 +1,9 @@
 import time
 from shifter import Shifter
-from RPi import GPIO
+try:
+    from RPi import GPIO
+except (ImportError, RuntimeError):
+    import mock_gpio as GPIO
 
 class Stepper:    
     seq = [0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001]

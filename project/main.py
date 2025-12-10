@@ -8,17 +8,31 @@ import os
 from stepperS import Stepper, interleave_rotate
 from shifter import Shifter
 import math
-from RPi import GPIO
-from command import fetchJson, getMePos, getEnemyPos, getGlobes, getFiringAngles
+try:
+    from RPi import GPIO
+except (ImportError, RuntimeError):
+    import mock_gpio as GPIO
+    print("⚠️  MOCK MODE - Running without hardware")
+from command import *
 import signal
 import sys
 
 PORT = 8080
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
-DEV_MODE = not os.path.exists(FRONTEND_DIR)  
 LASER_PIN = 22
 TEAM_NUMBER = '13' 
 JSON_URL = 'http://192.168.1.254:8000/positions.json'
+
+# Position data - load local file on startup for testing
+position_data = None
+try:
+    fallback_path = os.path.join(os.path.dirname(__file__), '../frontend/public/positions.json')
+    if os.path.exists(fallback_path):
+        import json as json_module
+        with open(fallback_path, 'r') as f:
+            position_data = json_module.load(f)
+        print(f"Loaded local positions.json for testing")
+except Exception as e:
+    print(f"Could not load local positions.json: {e}")
 
 # Setup laser pin
 GPIO.setup(LASER_PIN, GPIO.OUT)
@@ -86,7 +100,7 @@ class TurretState:
                         self.azimuth = new_az
                         self.altitude = new_alt
             else:
-                # Turn off motors when not moving to prevent heating
+                # Turn off motors when not moving
                 self.azimuth_motor.off()
                 self.altitude_motor.off()
             
@@ -105,29 +119,12 @@ class TurretState:
             self.laser_on = state
             GPIO.output(LASER_PIN, GPIO.HIGH if state else GPIO.LOW)
     
-    def calibrate(self, point_to_origin=False):
-        """
-        Set current position as zero reference.
-        If point_to_origin=True, physically moves turret to point toward field origin first.
-        """
-        if point_to_origin:
-            # Calculate angle to point toward origin from turret position
-            # Turret at (r, theta) needs to point at angle theta + pi
-            my_pos = getMePos(fetchJson(JSON_URL, save_local=False), TEAM_NUMBER)
-            angle_to_origin = my_pos[1] + math.pi
-            
-            # Normalize to [-pi, pi]
-            while angle_to_origin > math.pi:
-                angle_to_origin -= 2 * math.pi
-            while angle_to_origin < -math.pi:
-                angle_to_origin += 2 * math.pi
-            
-            print(f"Moving to point toward origin (azimuth={angle_to_origin:.3f}rad)...")
-            self.move_to_position(angle_to_origin, 0.0)
-        
+    def calibrate(self):
+        """Set current position as zero reference (doesn't move turret)"""
         with self.lock:
             self.azimuth = 0.0
             self.altitude = 0.0
+        print("Calibrated: current position set to zero")
     
     def move_to_position(self, target_azimuth, target_altitude):
         """Move to absolute position (blocking call)"""
@@ -169,22 +166,10 @@ class TurretState:
         self.set_velocity(0, 0)
         self.set_laser(False)
         time.sleep(0.1)
-        
-        # Clear shift register - send zero multiple times to ensure it takes
-        for _ in range(3):
-            self.shifter.shiftByte(0)
-            time.sleep(0.01)
-        
+        self.azimuth_motor.off()
+        self.altitude_motor.off()
         # Set GPIO pins low before cleanup
-        print("Setting GPIO pins low...")
         GPIO.output(LASER_PIN, GPIO.LOW)
-    #    GPIO.output(self.shifter.dataPin, GPIO.LOW)
-       #GPIO.output(self.shifter.clockPin, GPIO.LOW)
-        #GPIO.output(self.shifter.latchPin, GPIO.LOW)
-        time.sleep(0.1)
-        
-        # Clean up GPIO
-        print("Cleaning up GPIO...")
         GPIO.cleanup()
         print("Turret shutdown complete")
 
@@ -223,7 +208,7 @@ def auto_target_sequence():
             
         for i, target in enumerate(all_targets):
             if not auto_target_running:
-                print("\n⚠️ Auto-targeting STOPPED by user")
+                print("\nAuto-targeting STOPPED by user")
                 break
                 
             target_type = "Globe" if i < len(globes) else "Enemy"
@@ -259,19 +244,40 @@ class TurretHandler(BaseHTTPRequestHandler):
         """Handle GET requests"""
         parsed = urlparse(self.path)
         
-        # API endpoints
+        # API endpoints - send ALL data (turret + enemies + globes)
         if parsed.path == '/api/position':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
-            position = turret_state.get_position()
-            self.wfile.write(json.dumps(position).encode())
+            turret_pos = turret_state.get_position()
+            response = {'turret': turret_pos, 'enemies': [], 'globes': [], 'my_position': None}
+            
+            global position_data
+            if position_data:
+                try:
+                    my_pos = getMePos(position_data, TEAM_NUMBER)
+                    # Convert to Cartesian (Three.js uses Y as up, XZ as ground plane)
+                    my_x = my_pos[0] * math.cos(my_pos[1])
+                    my_z = my_pos[0] * math.sin(my_pos[1])
+                    response['my_position'] = {'x': my_x, 'z': my_z, 'angle_to_origin': math.atan2(-my_z, -my_x)}
+                    
+                    response['enemies'] = [
+                        {'x': e[0] * math.cos(e[1]), 'z': e[0] * math.sin(e[1]), 'y': e[2]}
+                        for e in getEnemyPos(position_data, TEAM_NUMBER)
+                    ]
+                    response['globes'] = [
+                        {'x': g[0] * math.cos(g[1]), 'z': g[0] * math.sin(g[1]), 'y': g[2]}
+                        for g in getGlobes(position_data)
+                    ]
+                except Exception as e:
+                    print(f"Error parsing positions: {e}")
+            
+            self.wfile.write(json.dumps(response).encode())
             return
         
-        # Serve static files for frontend
-        self.serve_static_file(parsed.path)
+        self.send_error(404, 'Not found')
     
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -286,7 +292,7 @@ class TurretHandler(BaseHTTPRequestHandler):
         
         # Motor velocity control
         if parsed.path == '/api/move':
-            azimuth_vel = float(data.get('azimuth', 0))
+            azimuth_vel = -float(data.get('azimuth', 0))  # Invert for correct direction
             altitude_vel = -float(data.get('altitude', 0))
             
             turret_state.set_velocity(azimuth_vel, altitude_vel)
@@ -300,26 +306,24 @@ class TurretHandler(BaseHTTPRequestHandler):
         
         # Laser control
         elif parsed.path == '/api/laser':
-            laser_state = bool(data.get('laser', False))
-            turret_state.set_laser(laser_state)
+            turret_state.set_laser(bool(data.get('laser', False)))
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'laser': laser_state}).encode())
+            self.wfile.write(json.dumps({'status': 'ok'}).encode())
             return
         
         # Calibration
         elif parsed.path == '/api/calibrate':
-            point_to_origin = data.get('point_to_origin', True)
-            turret_state.calibrate(point_to_origin=point_to_origin)
+            turret_state.calibrate()
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'message': 'Calibrated to zero'}).encode())
+            self.wfile.write(json.dumps({'status': 'ok'}).encode())
             return
         
         # Auto-targeting sequence
@@ -330,7 +334,7 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'message': 'Auto-targeting started'}).encode())
+            self.wfile.write(json.dumps({'status': 'ok'}).encode())
             return
         
         # Stop auto-targeting
@@ -344,25 +348,21 @@ class TurretHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'message': 'Auto-targeting stopped'}).encode())
+            self.wfile.write(json.dumps({'status': 'ok'}).encode())
             return
         
-        # Fetch JSON from competition server
+        # Fetch JSON - manual refresh
         elif parsed.path == '/api/fetch-json':
+            global position_data
             try:
-                data = fetchJson(JSON_URL, save_local=True)
-                
+                position_data = fetchJson(JSON_URL, save_local=False)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps({
-                    'status': 'ok', 
-                    'message': 'JSON fetched and saved',
-                    'data': data
-                }).encode())
+                self.wfile.write(json.dumps({'status': 'ok'}).encode())
             except Exception as e:
-                self.send_error(500, f'Failed to fetch JSON: {str(e)}')
+                self.send_error(500, f'Failed to fetch: {str(e)}')
             return
         
         self.send_error(404, 'Endpoint not found')
@@ -374,51 +374,6 @@ class TurretHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-    
-    def serve_static_file(self, path):
-        """Serve static files from frontend dist directory"""
-        # In dev mode, frontend is served by Vite on a different port
-        if DEV_MODE:
-            self.send_error(404, 'Dev mode: Use Vite dev server on port 5173')
-            return
-        
-        if path == '/':
-            path = '/index.html'
-        
-        file_path = os.path.join(FRONTEND_DIR, path.lstrip('/'))
-        
-        # Security: prevent directory traversal
-        if not os.path.abspath(file_path).startswith(os.path.abspath(FRONTEND_DIR)):
-            self.send_error(403, 'Forbidden')
-            return
-        
-        if not os.path.exists(file_path) or os.path.isdir(file_path):
-            self.send_error(404, 'File not found')
-            return
-        
-        content_type = 'text/html'
-        if file_path.endswith('.js'):
-            content_type = 'application/javascript'
-        elif file_path.endswith('.css'):
-            content_type = 'text/css'
-        elif file_path.endswith('.json'):
-            content_type = 'application/json'
-        elif file_path.endswith('.png'):
-            content_type = 'image/png'
-        elif file_path.endswith('.svg'):
-            content_type = 'image/svg+xml'
-        
-        try:
-            with open(file_path, 'rb') as f:
-                content = f.read()
-            
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Content-Length', len(content))
-            self.end_headers()
-            self.wfile.write(content)
-        except Exception as e:
-            self.send_error(500, f'Error reading file: {str(e)}')
     
     def log_message(self, format, *args):
         """Custom log format - suppress position polling spam"""
@@ -438,25 +393,8 @@ def run_server():
     server = HTTPServer(('0.0.0.0', PORT), TurretHandler)
     server_instance = server
     
-    print(f"Turret control server starting on port {PORT}")
-    print(f"Mode: {'Development' if DEV_MODE else 'Production'}")
-    
-    if DEV_MODE:
-        print(f"\nDEV MODE:")
-        print(f"  1. Start backend: python3 project/main.py")
-        print(f"  2. Start frontend: cd frontend && npm run dev")
-        print(f"  3. Access frontend at http://localhost:5173")
-    else:
-        print(f"Frontend directory: {FRONTEND_DIR}")
-        print(f"Access at http://localhost:{PORT}")
-    
-    print(f"\nAPI Endpoints:")
-    print(f"  POST /api/move - Set velocity (azimuth: -1/0/1, altitude: -1/0/1)")
-    print(f"  POST /api/laser - Control laser")
-    print(f"  POST /api/calibrate - Calibrate to zero")
-    print(f"  POST /api/fetch-json - Fetch and save competition JSON")
-    print(f"  POST /api/auto-target - Start automated targeting sequence")
-    print(f"  GET  /api/position - Get current position (polled at 10Hz)")
+    print(f"API Server: http://localhost:{PORT}")
+    print(f"Frontend: http://localhost:5173 (run: cd frontend && npm run dev)")
     
     try:
         server.serve_forever()
