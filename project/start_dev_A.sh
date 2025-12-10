@@ -3,7 +3,7 @@
 
 echo "NOTOOTOTOOTOTO..."
 echo " ython backend server on port 8080..."
-cd /home/jtacchetti/final_project/enme441/frontend
+cd /home/jtacchetti/final_project/enme441
 python3 project/main.py &
 BACKEND_PID=$!
 
@@ -11,7 +11,7 @@ sleep 2
 
 echo ""
 echo "Starting Vite frontend dev server..."
-cd /home/jtacchetti/final_project/enme441/frontend
+cd /home/jtacchetti/final_project/enme441
 npm run dev -- --host &
 FRONTEND_PID=$!
 
