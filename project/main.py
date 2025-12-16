@@ -62,9 +62,10 @@ class TurretState:
         self.altitude_motor = Stepper(self.shifter, self.motor_lock_alt)  # QA-QD (bits 0-3)
         self.azimuth_motor = Stepper(self.shifter, self.motor_lock_az)    # QE-QH (bits 4-7)
         
-        # Zero motors at start
+        # Zero motors at start and turn off coils
         self.altitude_motor.zero()
         self.azimuth_motor.zero()
+        self.shifter.shiftByte(0)  # motors off by default
         
         # Start continuous movement thread for manual control
         self.running = True
@@ -76,9 +77,15 @@ class TurretState:
             self.azimuth_velocity = max(-1, min(1, azimuth_vel))
             self.altitude_velocity = max(-1, min(1, altitude_vel))
     
+    def motors_off(self):
+        """Turn off all motor coils to prevent overheating"""
+        Stepper.shifter_outputs.value = 0
+        self.shifter.shiftByte(0)
+    
     def _movement_loop(self):
         """Manual velocity control - queues small movements to multiprocessing steppers"""
         STEP_DEG = 1.15  # ~0.02 radians per movement chunk
+        was_moving = False
         
         while self.running:
             with self.lock:
@@ -86,6 +93,7 @@ class TurretState:
                 alt_vel = self.altitude_velocity
             
             if az_vel != 0 or alt_vel != 0:
+                was_moving = True
                 # Queue movements to the motor worker processes
                 if az_vel != 0:
                     self.azimuth_motor.rotate(-STEP_DEG * az_vel)  # negate for direction
@@ -98,10 +106,13 @@ class TurretState:
                     self.altitude = max(-1.57, min(1.57, self.altitude + 0.02 * alt_vel))
                 
                 # Wait for movement to complete before queuing more
-                # step_delay(1200us) * steps_per_chunk(~13) = ~16ms
                 time.sleep(0.02)
             else:
-                # Motors hold position when idle (no off needed with multiprocessing)
+                if was_moving:
+                    # Just stopped - wait for last movement then turn off coils
+                    time.sleep(0.02)
+                    self.motors_off()
+                    was_moving = False
                 time.sleep(0.05) 
     
     def get_position(self):
@@ -163,6 +174,9 @@ class TurretState:
         with self.lock:
             self.azimuth = target_azimuth
             self.altitude = target_altitude
+        
+        # Turn off coils to prevent overheating
+        self.motors_off()
     
     def shutdown(self):
         print("Shutting down turret...")
@@ -177,8 +191,8 @@ class TurretState:
         if hasattr(self.altitude_motor, 'worker'):
             self.altitude_motor.worker.terminate()
         
-        # Clear shift register (turn off motor coils)
-        self.shifter.shiftByte(0)
+        # Turn off motor coils
+        self.motors_off()
         
         # Set GPIO pins low before cleanup
         GPIO.output(LASER_PIN, GPIO.LOW)
