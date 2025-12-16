@@ -90,10 +90,11 @@ class Stepper:
         while True:
             cmd = self.queue.get()
             if cmd is None:
-                # Off command - clear this motor's bits
+                # Off command - must hold lock during entire shift operation
+                # to prevent race with other motor's off command
                 with Stepper.shifter_outputs.get_lock():
-                    Stepper.shifter_outputs.value &= ~(0b1111 << self.shifter_bit_start)
-                    self.s.shiftByte(Stepper.shifter_outputs.value)
+                    Stepper.shifter_outputs.value = 0
+                    self.s.shiftByte(0)
             else:
                 self.__rotate(cmd)
             

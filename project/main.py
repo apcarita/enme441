@@ -79,9 +79,11 @@ class TurretState:
     
     def motors_off(self):
         """Turn off all motor coils to prevent overheating"""
-        # Send off commands through the queue so they execute after pending moves
-        self.azimuth_motor.off()
-        self.altitude_motor.off()
+        # Wait for any pending movements to complete, then send 0 directly
+        time.sleep(0.05)
+        with Stepper.shifter_outputs.get_lock():
+            Stepper.shifter_outputs.value = 0
+            self.shifter.shiftByte(0)
     
     def _movement_loop(self):
         """Manual velocity control - queues small movements to multiprocessing steppers"""
@@ -110,8 +112,8 @@ class TurretState:
                 time.sleep(0.02)
             else:
                 if was_moving:
-                    # Just stopped - wait for last movement then turn off coils
-                    time.sleep(0.02)
+                    # Just stopped - wait for queued movements to finish then turn off
+                    time.sleep(0.15)  # wait for any queued commands to complete
                     self.motors_off()
                     was_moving = False
                 time.sleep(0.05) 
@@ -185,7 +187,7 @@ class TurretState:
         self.set_velocity(0, 0)
         self.set_laser(False)
         
-        # Queue off commands and wait for them to process
+        # Turn off motors
         self.motors_off()
         time.sleep(0.1)
         
