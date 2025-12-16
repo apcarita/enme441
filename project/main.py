@@ -5,14 +5,15 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import os
-from stepperS import Stepper, interleave_rotate
+import multiprocessing
+from stepper_class_shiftregister_multiprocessing import Stepper
 from shifter import Shifter
 import math
 try:
     from RPi import GPIO
 except (ImportError, RuntimeError):
     import mock_gpio as GPIO
-    print("⚠️  MOCK MODE - Running without hardware")
+    print("MOCK MODE - Running without hardware")
 from command import *
 import signal
 import sys
@@ -50,12 +51,22 @@ class TurretState:
         self.azimuth_velocity = 0.0  # -1, 0, or 1
         self.altitude_velocity = 0.0  # -1, 0, or 1
         
-        # Initialize hardware
+        # Initialize hardware with multiprocessing steppers
         self.shifter = Shifter(data=17, latch=27, clock=4)
-        self.azimuth_motor = Stepper(self.shifter, bit_offset=4)  # QE-QH
-        self.altitude_motor = Stepper(self.shifter, bit_offset=0)  # QA-QD
         
-        # Start continuous movement thread
+        # Create multiprocessing locks (one per motor)
+        self.motor_lock_alt = multiprocessing.Lock()
+        self.motor_lock_az = multiprocessing.Lock()
+        
+        # Motors - order matters! First gets bits 0-3, second gets bits 4-7
+        self.altitude_motor = Stepper(self.shifter, self.motor_lock_alt)  # QA-QD (bits 0-3)
+        self.azimuth_motor = Stepper(self.shifter, self.motor_lock_az)    # QE-QH (bits 4-7)
+        
+        # Zero motors at start
+        self.altitude_motor.zero()
+        self.azimuth_motor.zero()
+        
+        # Start continuous movement thread for manual control
         self.running = True
         self.movement_thread = threading.Thread(target=self._movement_loop, daemon=True)
         self.movement_thread.start()
@@ -66,45 +77,32 @@ class TurretState:
             self.altitude_velocity = max(-1, min(1, altitude_vel))
     
     def _movement_loop(self):
-        STEP_SIZE = 0.02  # radians per step
+        """Manual velocity control - queues small movements to multiprocessing steppers"""
+        STEP_DEG = 1.15  # ~0.02 radians per movement chunk
         
         while self.running:
             with self.lock:
                 az_vel = self.azimuth_velocity
                 alt_vel = self.altitude_velocity
             
-            # Calculate movement
             if az_vel != 0 or alt_vel != 0:
-                az_move = STEP_SIZE * az_vel
-                alt_move = STEP_SIZE * alt_vel
+                # Queue movements to the motor worker processes
+                if az_vel != 0:
+                    self.azimuth_motor.rotate(-STEP_DEG * az_vel)  # negate for direction
+                if alt_vel != 0:
+                    self.altitude_motor.rotate(STEP_DEG * alt_vel)
                 
-                # Apply movement
-                new_az = self.azimuth + az_move
-                new_alt = self.altitude + alt_move
+                # Update position tracking
+                with self.lock:
+                    self.azimuth = max(-3.14, min(3.14, self.azimuth + 0.02 * az_vel))
+                    self.altitude = max(-1.57, min(1.57, self.altitude + 0.02 * alt_vel))
                 
-                # Clamp to limits
-                new_az = max(-3.14, min(3.14, new_az))
-                new_alt = max(-1.57, min(1.57, new_alt))
-                
-                # Move motors
-                az_deg = -math.degrees(new_az - self.azimuth)  # Negate for correct direction
-                alt_deg = math.degrees(new_alt - self.altitude)
-                
-                if az_deg != 0 or alt_deg != 0:
-                    interleave_rotate(
-                        [self.azimuth_motor, self.altitude_motor],
-                        [az_deg, alt_deg]
-                    )
-                    
-                    with self.lock:
-                        self.azimuth = new_az
-                        self.altitude = new_alt
+                # Wait for movement to complete before queuing more
+                # step_delay(1200us) * steps_per_chunk(~13) = ~16ms
+                time.sleep(0.02)
             else:
-                # Turn off motors when not moving
-                self.azimuth_motor.off()
-                self.altitude_motor.off()
-            
-            time.sleep(0.01)  #100Hz 
+                # Motors hold position when idle (no off needed with multiprocessing)
+                time.sleep(0.05) 
     
     def get_position(self):
         with self.lock:
@@ -124,52 +122,67 @@ class TurretState:
         with self.lock:
             self.azimuth = 0.0
             self.altitude = 0.0
+        # Also zero the motor's internal tracking
+        self.azimuth_motor.zero()
+        self.altitude_motor.zero()
         print("Calibrated: current position set to zero")
     
     def move_to_position(self, target_azimuth, target_altitude):
-        """Move to absolute position (blocking call)"""
-        # Stop any velocity-based movement
+        """Move to absolute position - queues full movement to multiprocessing steppers"""
         self.set_velocity(0, 0)
+        time.sleep(0.1)  # let velocity loop settle
         
         with self.lock:
             current_az = self.azimuth
             current_alt = self.altitude
         
-        # Calculate movement needed
+        # Calculate deltas
         delta_az = target_azimuth - current_az
         delta_alt = target_altitude - current_alt
         
-        # Convert to degrees
-        az_deg = -math.degrees(delta_az)  # Negate for correct direction
-        alt_deg = math.degrees(delta_alt)
+        # Convert to degrees for motors
+        delta_az_deg = -math.degrees(delta_az)  # negate for direction
+        delta_alt_deg = math.degrees(delta_alt)
         
-        # Execute movement
-        if az_deg != 0 or alt_deg != 0:
-            interleave_rotate(
-                [self.azimuth_motor, self.altitude_motor],
-                [az_deg, alt_deg]
-            )
-            
-            # Wait for last step to complete before de-energizing
-            time.sleep(Stepper.delay * 2)
-            
-            self.azimuth_motor.off()
-            self.altitude_motor.off()
-            
-            with self.lock:
-                self.azimuth = target_azimuth
-                self.altitude = target_altitude
+        # Queue rotations to worker processes (they execute in parallel)
+        if abs(delta_az_deg) > 0.1:
+            self.azimuth_motor.rotate(delta_az_deg)
+        if abs(delta_alt_deg) > 0.1:
+            self.altitude_motor.rotate(delta_alt_deg)
+        
+        # Wait for movement to complete
+        # steps = degrees * (4096 steps/rev) / 360 deg/rev
+        # time = steps * 1200us delay
+        steps_az = abs(delta_az_deg) * 4096 / 360
+        steps_alt = abs(delta_alt_deg) * 4096 / 360
+        max_steps = max(steps_az, steps_alt)
+        wait_time = max_steps * 0.0012 + 0.3  # step_delay * steps + buffer
+        time.sleep(wait_time)
+        
+        # Update position tracking
+        with self.lock:
+            self.azimuth = target_azimuth
+            self.altitude = target_altitude
     
     def shutdown(self):
         print("Shutting down turret...")
         self.running = False
         self.set_velocity(0, 0)
         self.set_laser(False)
-        time.sleep(0.1)
-        self.azimuth_motor.off()
-        self.altitude_motor.off()
+        time.sleep(0.2)
+        
+        # Terminate motor worker processes
+        if hasattr(self.azimuth_motor, 'worker'):
+            self.azimuth_motor.worker.terminate()
+        if hasattr(self.altitude_motor, 'worker'):
+            self.altitude_motor.worker.terminate()
+        
+        # Clear shift register (turn off motor coils)
+        self.shifter.shiftByte(0)
+        
         # Set GPIO pins low before cleanup
         GPIO.output(LASER_PIN, GPIO.LOW)
+        time.sleep(0.1)
         GPIO.cleanup()
         print("Turret shutdown complete")
 
@@ -188,7 +201,7 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 def auto_target_sequence():
-    global auto_target_running
+    global auto_target_running, position_data
     auto_target_running = True
     
     try:
@@ -197,7 +210,7 @@ def auto_target_sequence():
         position_data = fetchJson(JSON_URL)
             
         my_pos = getMePos(position_data, TEAM_NUMBER)
-        print(f"✓ current position: r={my_pos[0]:.1f}cm, theta={my_pos[1]:.3f}rad")
+        print(f"Current position: r={my_pos[0]:.1f}cm, theta={my_pos[1]:.3f}rad")
             
         enemies = getEnemyPos(position_data, TEAM_NUMBER)
         globes = getGlobes(position_data)

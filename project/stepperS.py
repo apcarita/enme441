@@ -7,7 +7,7 @@ except (ImportError, RuntimeError):
 
 class Stepper:    
     seq = [0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001]
-    delay = 0.0012  #1.2ms
+    delay = 0.0012  #1.2ms - original timing that works in manual
     steps_per_rev = 4096
     shifter_outputs = 0
     
@@ -50,8 +50,6 @@ def interleave_rotate(motors, degrees_list):
         for j, motor in enumerate(motors):
             if i < steps_list[j]:
                 motor.step(dirs[j])
-            else:
-                motor.off()
         time.sleep(Stepper.delay)
 
 def end(self):
