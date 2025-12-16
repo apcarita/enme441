@@ -88,12 +88,22 @@ class Stepper:
 
     def __worker_loop(self):                # constantly looks for new commands from main code
         while True:
-            delta = self.queue.get()
-            self.__rotate(delta)
+            cmd = self.queue.get()
+            if cmd is None:
+                # Off command - clear this motor's bits
+                with Stepper.shifter_outputs.get_lock():
+                    Stepper.shifter_outputs.value &= ~(0b1111 << self.shifter_bit_start)
+                    self.s.shiftByte(Stepper.shifter_outputs.value)
+            else:
+                self.__rotate(cmd)
             
     # Move relative angle from current position:
     def rotate(self, delta):
         self.queue.put(delta)    # adds rotation command to a queue
+    
+    # Turn off this motor's coils (queued so it happens after pending moves)
+    def off(self):
+        self.queue.put(None)
 
     # Move to an absolute angle taking the shortest possible path:
     def goAngle(self, target_angle):

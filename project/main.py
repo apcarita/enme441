@@ -79,8 +79,9 @@ class TurretState:
     
     def motors_off(self):
         """Turn off all motor coils to prevent overheating"""
-        Stepper.shifter_outputs.value = 0
-        self.shifter.shiftByte(0)
+        # Send off commands through the queue so they execute after pending moves
+        self.azimuth_motor.off()
+        self.altitude_motor.off()
     
     def _movement_loop(self):
         """Manual velocity control - queues small movements to multiprocessing steppers"""
@@ -183,7 +184,10 @@ class TurretState:
         self.running = False
         self.set_velocity(0, 0)
         self.set_laser(False)
-        time.sleep(0.2)
+        
+        # Queue off commands and wait for them to process
+        self.motors_off()
+        time.sleep(0.1)
         
         # Terminate motor worker processes
         if hasattr(self.azimuth_motor, 'worker'):
@@ -191,8 +195,8 @@ class TurretState:
         if hasattr(self.altitude_motor, 'worker'):
             self.altitude_motor.worker.terminate()
         
-        # Turn off motor coils
-        self.motors_off()
+        # Clear shift register directly (workers are terminated)
+        self.shifter.shiftByte(0)
         
         # Set GPIO pins low before cleanup
         GPIO.output(LASER_PIN, GPIO.LOW)
